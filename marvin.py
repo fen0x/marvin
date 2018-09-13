@@ -25,7 +25,7 @@ def help(bot, update):
 def postalink(bot, update):
     # print("Reply from:" + str(update.message.reply_to_message.text))
     message_entities_dict = update.message.reply_to_message.parse_entities([MessageEntity.URL])
-    print("Lung of entities dict:" + str(len(message_entities_dict)))
+    print("Size of entities dict:" + str(len(message_entities_dict)))
     if len(message_entities_dict) == 1:
         link_to_post = next(iter(message_entities_dict))
         print("Link to post:" + str(update.message.reply_to_message.parse_entity(link_to_post)))
