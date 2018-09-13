@@ -1,5 +1,13 @@
 {
-  "telegram":{
+  "telegram": {
     "login_token": "TOKEN"
+  },
+  "reddit": {
+    "subreddit_name": "italyinformatica",
+    "client_id": "",
+    "client_secret": "",
+    "user_agent": "",
+    "username": "",
+    "password": ""
   }
 }
