@@ -1,17 +1,30 @@
-from telegram.ext import Updater, Handler, CommandHandler, MessageHandler, TypeHandler, Filters, BaseFilter
-from telegram import MessageEntity, Message
-import logging
-import praw
 import json
+import logging
+import urllib
+import praw
+
+from urllib import request
+from bs4 import BeautifulSoup
+from telegram import MessageEntity
+from telegram.ext import Updater, CommandHandler, Filters
 
 # Enable logging
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                     level=logging.INFO)
 
-# Logger rederence
+# Logger reference
 logger = logging.getLogger(__name__)
 # Subreddit reference to send posts
 subreddit = None
+
+
+def get_page_title_from_url(page_url: str):
+    """ Function that return the title of the given web page
+    :param page_url: The page to get the title from
+    :return: A string that contain the title of the given page
+    """
+    soup = BeautifulSoup(urllib.request.urlopen(page_url), "lxml")
+    return str(soup.title.string)
 
 
 # Define a few command handlers. These usually take the two arguments bot and
@@ -30,15 +43,20 @@ def postalink(bot, update):
     # print("Reply from:" + str(update.message.reply_to_message.text))
     message_entities_dict = update.message.reply_to_message.parse_entities([MessageEntity.URL])
     print("Size of entities dict:" + str(len(message_entities_dict)))
+    # print("Author of the post: " + update.message.from_user.username)
+    print("Author of the post: " + update.message.from_user.name)
     if len(message_entities_dict) == 1:
         link_to_post = str(update.message.reply_to_message.parse_entity(next(iter(message_entities_dict))))
         print("Link to post:" + link_to_post)
-        update.message.reply_text("Lo posto!")
-        ''' This is how to submit to reddit:
+        link_page_title = get_page_title_from_url(link_to_post)
+        print("Website title:" + link_page_title)
+        # submit to reddit:
         global subreddit
-        title = "?"
-        subreddit.submit(title, url=link_to_post)
-        '''
+        # Create the post title
+        title = "[Post from telegram by:" + update.message.from_user.name + "]" + link_page_title
+        submission = subreddit.submit(title, url=link_to_post)
+        print("Link to created post:" + str(submission.shortlink))
+        update.message.reply_text("Post creato:" + str(submission.shortlink))
     else:
         update.message.reply_text("Non posso postare quel contenuto...")
 
@@ -82,14 +100,13 @@ def main():
                          user_agent=bot_data_file["reddit"]["user_agent"],
                          username=bot_data_file["reddit"]["username"],
                          password=bot_data_file["reddit"]["password"])
-
+    print("Bot username:" + str(reddit.user.me()))
     # Read subreddit
     global subreddit
     subreddit = reddit.subreddit(bot_data_file["reddit"]["subreddit_name"])
     # Subreddit test - TODO remove this
     print(subreddit.display_name)
     print(subreddit.title)
-    print(subreddit.description)
 
     # Start the Bot
     updater.start_polling()
