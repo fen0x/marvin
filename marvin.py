@@ -53,6 +53,10 @@ def postalink(subreddit, bot, update):
 
     link_to_post = next(iter(urls_entities.values()))
     logger.debug("Link in message: %s", link_to_post)
+    link_parsed = urllib.parse.urlparse(link_to_post)
+    if link_parsed.scheme not in ['http', 'https']:
+        update.message.reply_text("Il messaggio originale deve contenere un link HTTP(S)")
+        return
     link_page_title = get_page_title_from_url(link_to_post)
     logger.debug("Link title from web: %s", link_page_title)
     # Submit to reddit:
