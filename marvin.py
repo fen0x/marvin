@@ -1,21 +1,21 @@
 import json
 import logging
 import urllib
-import praw
+from functools import partial
 
-from urllib import request
+import praw
 from bs4 import BeautifulSoup
 from telegram import MessageEntity
-from telegram.ext import Updater, CommandHandler, Filters
+from telegram.ext import CommandHandler, Filters, Updater
 
 # Enable logging
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                    level=logging.INFO)
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
 # Logger reference
 logger = logging.getLogger(__name__)
+
 # Subreddit reference to send posts
-subreddit = None
 
 
 def get_page_title_from_url(page_url: str):
@@ -31,37 +31,38 @@ def get_page_title_from_url(page_url: str):
 # update. Error handlers also receive the raised TelegramError object in error.
 def start(bot, update):
     """Send a message when the command /start is issued."""
-    update.message.reply_text('Hi!')
+    update.message.reply_text('In un gruppo, rispondi ad un link con il comando /postalink')
 
 
-def help(bot, update):
-    """Send a message when the command /help is issued."""
-    update.message.reply_text('Help!')
-
-
-def postalink(bot, update):
+def postalink(subreddit, bot, update):
     # print("Reply from:" + str(update.message.reply_to_message.text))
-    message_entities_dict = update.message.reply_to_message.parse_entities([MessageEntity.URL])
-    print("Size of entities dict:" + str(len(message_entities_dict)))
-    # print("Author of the post: " + update.message.from_user.username)
-    print("Author of the post: " + update.message.from_user.name)
-    if len(message_entities_dict) == 1:
-        link_to_post = str(update.message.reply_to_message.parse_entity(next(iter(message_entities_dict))))
-        print("Link to post:" + link_to_post)
-        link_page_title = get_page_title_from_url(link_to_post)
-        print("Website title:" + link_page_title)
-        # submit to reddit:
-        global subreddit
-        # Create the post title
-        title = "[Post from telegram by:" + update.message.from_user.name + "]" + link_page_title
-        submission = subreddit.submit(title, url=link_to_post)
-        print("Link to created post:" + str(submission.shortlink))
-        update.message.reply_text("Post creato:" + str(submission.shortlink))
-    else:
-        update.message.reply_text("Non posso postare quel contenuto...")
+    if not update.message.reply_to_message:
+        update.message.reply_text("Per usare questo comando devi rispondere ad un messaggio")
+        return
+    message = update.message.reply_to_message
+    logger.info("Autore del messaggio: %s", message.from_user.name)
+
+    urls_entities = message.parse_entities([MessageEntity.URL])
+    print(urls_entities, len(urls_entities))
+    if not urls_entities:
+        update.message.reply_text("Il messaggio originale deve contenere una URL")
+        return
+    if len(urls_entities) > 1:
+        update.message.reply_text("Il messaggio originale deve contenere una **sola** URL")
+        return
+
+    link_to_post = next(iter(urls_entities.values()))
+    logger.debug("Link in message: %s", link_to_post)
+    link_page_title = get_page_title_from_url(link_to_post)
+    logger.debug("Link title from web: %s", link_page_title)
+    # Submit to reddit:
+    title = link_page_title + " [From telegram" + update.message.from_user.name + "]"
+    submission = subreddit.submit(title, url=link_to_post)
+    logger.info("Link to created post: %s", str(submission.shortlink))
+    update.message.reply_text("Post creato: " + str(submission.shortlink))
 
 
-def error(bot, update, error):
+def error_handler(bot, update, error):
     """Log Errors caused by Updates."""
     logger.warning('Update "%s" caused error "%s"', update, error)
 
@@ -78,6 +79,16 @@ def main():
     except FileNotFoundError:
         print("FATAL ERROR-->" + file_name + " FILE NOT FOUND, ABORTING...")
         quit(1)
+
+    # reddit login
+    reddit = praw.Reddit(**bot_data_file["reddit"])
+    print("Bot username:" + str(reddit.user.me()))
+    # Read subreddit
+    subreddit = reddit.subreddit(bot_data_file["bot"]["subreddit"])
+    # Subreddit test - TODO remove this
+    print(subreddit.display_name)
+    print(subreddit.title)
+
     # Create the EventHandler and pass it your bot's token.
     print("Starting bot... Logging in...")
     updater = Updater(bot_data_file["telegram"]["login_token"])
@@ -89,24 +100,10 @@ def main():
     dp.add_handler(CommandHandler("start", start))
     dp.add_handler(CommandHandler("help", help))
 
-    dp.add_handler(CommandHandler("postalink", postalink, Filters.reply))
+    dp.add_handler(CommandHandler("postalink", partial(postalink, subreddit), Filters.reply))
 
     # log all errors
-    dp.add_error_handler(error)
-
-    # reddit login
-    reddit = praw.Reddit(client_id=bot_data_file["reddit"]["client_id"],
-                         client_secret=bot_data_file["reddit"]["client_secret"],
-                         user_agent=bot_data_file["reddit"]["user_agent"],
-                         username=bot_data_file["reddit"]["username"],
-                         password=bot_data_file["reddit"]["password"])
-    print("Bot username:" + str(reddit.user.me()))
-    # Read subreddit
-    global subreddit
-    subreddit = reddit.subreddit(bot_data_file["reddit"]["subreddit_name"])
-    # Subreddit test - TODO remove this
-    print(subreddit.display_name)
-    print(subreddit.title)
+    dp.add_error_handler(error_handler)
 
     # Start the Bot
     updater.start_polling()
