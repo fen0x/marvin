@@ -1,6 +1,6 @@
 import json
 import logging
-import urllib
+from urllib import parse as urlparse, request as urlrequest, error as urlerror
 from functools import partial
 
 import praw
@@ -23,7 +23,10 @@ def get_page_title_from_url(page_url: str):
     :param page_url: The page to get the title from
     :return: A string that contain the title of the given page
     """
-    soup = BeautifulSoup(urllib.request.urlopen(page_url), "lxml")
+    try:
+        soup = BeautifulSoup(urlrequest.urlopen(page_url), "lxml")
+    except urlerror.URLError:
+        return None
     return str(soup.title.string)
 
 
@@ -53,11 +56,18 @@ def postalink(subreddit, bot, update):
 
     link_to_post = next(iter(urls_entities.values()))
     logger.debug("Link in message: %s", link_to_post)
-    link_parsed = urllib.parse.urlparse(link_to_post)
-    if link_parsed.scheme not in ['http', 'https']:
+    # Check link schema
+    link_parsed = urlparse.urlparse(link_to_post)
+    if not link_parsed.scheme:
+        link_to_post = 'https://' + link_to_post
+    elif link_parsed.scheme not in ['http', 'https']:
         update.message.reply_text("Il messaggio originale deve contenere un link HTTP(S)")
         return
+    # Fetch page title
     link_page_title = get_page_title_from_url(link_to_post)
+    if not link_page_title:
+        update.message.reply_text("Non sono riuscito a trovare il titolo della pagina")
+        return
     logger.debug("Link title from web: %s", link_page_title)
     # Submit to reddit:
     title = link_page_title + " [From telegram" + update.message.from_user.name + "]"
@@ -102,7 +112,6 @@ def main():
 
     # on different commands - answer in Telegram
     dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(CommandHandler("help", help))
 
     dp.add_handler(CommandHandler("postalink", partial(postalink, subreddit), Filters.reply))
 
