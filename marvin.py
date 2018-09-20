@@ -15,8 +15,6 @@ logging.basicConfig(
 # Logger reference
 logger = logging.getLogger(__name__)
 
-# Subreddit reference to send posts
-
 
 def get_page_title_from_url(page_url: str):
     """ Function that return the title of the given web page
@@ -98,7 +96,7 @@ def main():
     reddit = praw.Reddit(**bot_data_file["reddit"])
     print("Bot username:" + str(reddit.user.me()))
     # Read subreddit
-    subreddit = reddit.subreddit(bot_data_file["bot"]["subreddit"])
+    subreddit = reddit.subreddit(bot_data_file["reddit"]["subreddit_name"])
     # Subreddit test - TODO remove this
     print(subreddit.display_name)
     print(subreddit.title)
