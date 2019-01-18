@@ -2,6 +2,7 @@ import json
 import logging
 import requests
 import praw
+import io
 
 from lxml.html import fromstring
 from urllib import parse as urlparse, request as urlrequest, error as urlerror
@@ -19,11 +20,15 @@ logger = logging.getLogger(__name__)
 
 
 class MarvinBot:
-
     # The subreddit where the bot must post
     subreddit_name = None
     # The authorized group id, used to deny commands from other chats
     authorized_group_id = None
+    # The default comment the bod will automatically add to every post submitted
+    default_comment_content = None
+    # The files to open on startup
+    config_file_name = "content/bot_data.json"
+    comment_file_name = "content/defaultComment.txt"
 
     @staticmethod
     def get_page_title_from_url(page_url: str):
@@ -65,8 +70,15 @@ class MarvinBot:
         :param chat: The chat where the message has been sent
         :return: True if the message is in the group saved in the JSON, False otherwise
         """
-        print("ID:"+str(chat.id))
         return chat.id == self.authorized_group_id
+
+    def add_default_comment(self, post_submission):
+        """
+        Function that add the default comment to the given post submission
+        :param post_submission: The submitted post where the bot should add the comment
+        """
+        post_submission.reply(self.default_comment_content)
+        logger.info("Default comment sent!")
 
     # Define a few command handlers. These usually take the two arguments bot and
     # update. Error handlers also receive the raised TelegramError object in error.
@@ -80,13 +92,13 @@ class MarvinBot:
             update.message.reply_text("Per usare questo comando devi rispondere ad un messaggio")
             return
         # Check if the command has been used in the correct group
-        if not self.is_message_in_correct_group(update.message.chat):
+        '''if not self.is_message_in_correct_group(update.message.chat):
             update.message.reply_text("Spiacente, questo bot funziona solo nel gruppo autorizzato")
             return
         # Check if the command has been used from an administrator
         if not self.is_sender_admin(bot, update.message.chat.id, update.message.from_user.id):
             update.message.reply_text("Spiacente, non sei un amministratore.")
-            return
+            return'''
         message = update.message.reply_to_message
         logger.info("Autore del messaggio: %s", message.from_user.name)
 
@@ -100,7 +112,6 @@ class MarvinBot:
             return
 
         link_to_post = next(iter(urls_entities.values()))
-        logger.debug("Link in message: %s", link_to_post)
         # Check link schema
         link_parsed = urlparse.urlparse(link_to_post)
         if not link_parsed.scheme:
@@ -117,6 +128,9 @@ class MarvinBot:
         # Submit to reddit:
         title = link_page_title + " [From telegram" + update.message.from_user.name + "]"
         submission = subreddit.submit(title, url=link_to_post)
+        # Add the default comment
+        self.add_default_comment(submission)
+        # Send the link to Telegram
         logger.info("Link to created post: %s", str(submission.shortlink))
         update.message.reply_text("Post creato: " + str(submission.shortlink))
 
@@ -128,15 +142,19 @@ class MarvinBot:
         """Start the bot."""
         print("Starting bot... Reading login Token...")
         # Read the token from the json
-        file_name = "bot_data.json"
         bot_data_file = None
         try:
-            with open(file_name) as data_file:
+            with open(self.config_file_name) as data_file:
                 bot_data_file = json.load(data_file)
         except FileNotFoundError:
-            print("FATAL ERROR-->" + file_name + " FILE NOT FOUND, ABORTING...")
+            print("FATAL ERROR-->" + self.config_file_name + " FILE NOT FOUND, ABORTING...")
             quit(1)
-
+        # Read the default comment data
+        try:
+            self.default_comment_content = io.open(self.comment_file_name, mode="r", encoding="utf-8").read()
+        except FileNotFoundError:
+            print("FATAL ERROR-->" + self.comment_file_name + " FILE NOT FOUND, ABORTING...")
+            quit(1)
         # reddit login
         reddit = praw.Reddit(**bot_data_file["reddit"])
         # Read subreddit
