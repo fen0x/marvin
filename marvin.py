@@ -92,13 +92,13 @@ class MarvinBot:
             update.message.reply_text("Per usare questo comando devi rispondere ad un messaggio")
             return
         # Check if the command has been used in the correct group
-        '''if not self.is_message_in_correct_group(update.message.chat):
+        if not self.is_message_in_correct_group(update.message.chat):
             update.message.reply_text("Spiacente, questo bot funziona solo nel gruppo autorizzato")
             return
         # Check if the command has been used from an administrator
         if not self.is_sender_admin(bot, update.message.chat.id, update.message.from_user.id):
             update.message.reply_text("Spiacente, non sei un amministratore.")
-            return'''
+            return
         message = update.message.reply_to_message
         logger.info("Autore del messaggio: %s", message.from_user.name)
 
