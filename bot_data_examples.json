@@ -4,6 +4,7 @@
   },
   "reddit": {
     "subreddit_name": "ItalyInformaticaTest",
+    "telegram_group_id": 0,
     "client_id": "",
     "client_secret": "",
     "user_agent": "",

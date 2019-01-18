@@ -1,3 +1,4 @@
+requests
 lxml
 beautifulsoup4
 telegram==0.0.1
