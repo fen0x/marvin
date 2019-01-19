@@ -3,3 +3,5 @@
 venv/
 
 content/bot_data\.json
+
+*.log
