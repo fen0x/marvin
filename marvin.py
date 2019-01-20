@@ -232,7 +232,9 @@ class MarvinBot:
             quit(1)
         # Read the default comment data
         try:
-            self.default_comment_content = io.open(self.comment_file_name, mode="r", encoding="utf-8").read()
+            file = io.open(self.comment_file_name, mode="r", encoding="utf-8")
+            self.default_comment_content = file.read()
+            file.close()
         except FileNotFoundError:
             self.logger.error("FATAL ERROR-->" + self.comment_file_name + " FILE NOT FOUND, ABORTING...")
             quit(1)
