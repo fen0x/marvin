@@ -103,7 +103,8 @@ class MarvinBot:
         Function that add the default comment to the given post submission
         :param post_submission: The submitted post where the bot should add the comment
         """
-        post_submission.reply(self.default_comment_content)
+        comment = post_submission.reply(self.default_comment_content)
+        comment.mod.distinguish(sticky=True)
         self.logger.info("Default comment sent!")
 
     # ---------------------------------------------
@@ -116,7 +117,7 @@ class MarvinBot:
         @:param bot: an object that represents a Telegram Bot.
         @:param update: an object that represents an incoming update.
         """
-        update.message.reply_text('In un gruppo, rispondi ad un link con il comando /postalink')
+        update.message.reply_text('In un gruppo, rispondi ad un link con il comando /postlink')
 
     def comment(self, bot, update):
         """ (Telegram command)
@@ -153,7 +154,7 @@ class MarvinBot:
         url = urls_entities.popitem()[1]
         cutted_url = self.get_post_id(url)
         submission = self.reddit.submission(id=cutted_url)
-        comment = submission.reply(comment_text)
+        submission.reply(comment_text)
         update.message.reply_text("Il tuo commento è stato aggiunto al post!")
         self.logger.info("Comment added to post with id:" + str(cutted_url))
 
