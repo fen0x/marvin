@@ -2,4 +2,4 @@ requests
 lxml
 telegram==0.0.1
 python-telegram-bot==11.1.0
-praw==6.0.0
+praw==6.1.0

@@ -26,6 +26,8 @@ class MarvinBot:
         self.authorized_group_id = None
         # The default comment the bod will automatically add to every post submitted
         self.default_comment_content = None
+        # Reference to the reddit instance
+        self.reddit = None
         # Logger Reference
         self.logger = logger_ref
 
@@ -35,7 +37,8 @@ class MarvinBot:
 
     @staticmethod
     def get_page_title_from_url(page_url: str):
-        """ Function that return the title of the given web page
+        """
+        Function that return the title of the given web page
         :param page_url: The page to get the title from
         :return: A string that contain the title of the given page
         """
@@ -62,6 +65,31 @@ class MarvinBot:
         else:
             return False
 
+    @staticmethod
+    def get_post_id(post_url: str):
+        """
+        This function return the post id from the given url
+        :param post_url: The reddit post url (usually shorted, "like https://redd.it/ddddd")
+        :return: The post ID, in the example above "ddddd"
+        """
+        if post_url.endswith('/'):
+            post_url = post_url[:-1]
+        end_pos = post_url.rfind('/') + 1
+        return post_url[end_pos:]
+
+    @staticmethod
+    def get_user_name(message):
+        """
+        Get the best user name from Telegram
+        :param message: the message
+        :return: The user nickname when available, the full name otherwise
+        """
+        user = message.from_user
+        if user.username is not None:
+            return '@' + user.username
+        else:
+            return ' - ' + user.full_name
+
     def is_message_in_correct_group(self, chat: Chat):
         """
         Function that return if the message has been sent in the correct group
@@ -83,19 +111,54 @@ class MarvinBot:
     # ---------------------------------------------
 
     def start(self, bot, update):
-        """
+        """ (Telegram command)
         Send a message when the command /start is issued.
         @:param bot: an object that represents a Telegram Bot.
         @:param update: an object that represents an incoming update.
         """
         update.message.reply_text('In un gruppo, rispondi ad un link con il comando /postalink')
 
-    def comment(self, subreddit, bot, update):
-        print("//TODO")
-        # TODO
-
-    def postalink(self, subreddit, bot, update):
+    def comment(self, bot, update):
+        """ (Telegram command)
+        Adds a comment to a previously posted post
+        :param bot: an object that represents a Telegram Bot.
+        :param update: an object that represents an incoming update.
         """
+        # Check if the command is used as reply to another message
+        if not update.message.reply_to_message:
+            update.message.reply_text("Per usare questo comando devi rispondere ad un messaggio")
+            return
+        # Check if the command has been used in the correct group
+        if not self.is_message_in_correct_group(update.message.chat):
+            update.message.reply_text("Spiacente, questo bot funziona solo nel gruppo autorizzato")
+            return
+        # Check if the reply message is from the bot
+        if bot.id != update.message.reply_to_message.from_user.id:
+            update.message.reply_text(
+                "Per usare questo comando devi rispondere ad un messaggio del bot, non di altri utenti")
+            return
+        # Check if the command has been used from an administrator
+        if not self.is_sender_admin(bot, update.message.chat.id, update.message.from_user.id):
+            update.message.reply_text("Spiacente, non sei un amministratore.")
+            return
+        # Check that the message has the url
+        urls_entities = update.message.reply_to_message.parse_entities([MessageEntity.URL])
+        if not urls_entities:
+            update.message.reply_text(
+                "Per usare questo comando devi rispondere ad un messaggio del bot contenente un link")
+            return
+        # Get the comment content, post id and post the comment
+        comment_text = "\\[From Telegram" + self.get_user_name(update.message) + "\\]:"
+        comment_text += update.message.text_markdown.replace("/comment", "").strip()
+        url = urls_entities.popitem()[1]
+        cutted_url = self.get_post_id(url)
+        submission = self.reddit.submission(id=cutted_url)
+        comment = submission.reply(comment_text)
+        update.message.reply_text("Il tuo commento è stato aggiunto al post!")
+        self.logger.info("Comment added to post with id:" + str(cutted_url))
+
+    def postlink(self, subreddit, bot, update):
+        """ (Telegram command)
         Read the link and post it in the subreddit
         :param subreddit: The subreddit where the bot should post the link
         :param bot: an object that represents a Telegram Bot.
@@ -114,7 +177,6 @@ class MarvinBot:
             update.message.reply_text("Spiacente, non sei un amministratore.")
             return
         message = update.message.reply_to_message
-        self.logger.info("Autore del messaggio: %s", message.from_user.name)
 
         urls_entities = message.parse_entities([MessageEntity.URL])
         if not urls_entities:
@@ -138,10 +200,11 @@ class MarvinBot:
             update.message.reply_text("Non sono riuscito a trovare il titolo della pagina")
             return
         # Submit to reddit, add the default comment and dend the link to Telegram:
-        title = link_page_title + " [From telegram" + update.message.from_user.name + "]"
+        title = link_page_title + " [From Telegram" + self.get_user_name(update.message) + "]"
         submission = subreddit.submit(title, url=link_to_post)
         self.add_default_comment(submission)
         update.message.reply_text("Post creato: " + str(submission.shortlink))
+        self.logger.info("New post submitted")
 
     # ---------------------------------------------
     # Bot Start and Error manager
@@ -174,10 +237,10 @@ class MarvinBot:
             self.logger.error("FATAL ERROR-->" + self.comment_file_name + " FILE NOT FOUND, ABORTING...")
             quit(1)
         # reddit login
-        reddit = praw.Reddit(**bot_data_file["reddit"])
+        self.reddit = praw.Reddit(**bot_data_file["reddit"])
         # Read subreddit
         self.subreddit_name = bot_data_file["reddit"]["subreddit_name"]
-        subreddit = reddit.subreddit(self.subreddit_name)
+        subreddit = self.reddit.subreddit(self.subreddit_name)
         self.logger.info("Connecting to subreddit:" + str(subreddit.display_name) + " - " + str(subreddit.title))
         # Read authorized group name
         self.authorized_group_id = int(bot_data_file["telegram"]["authorized_group_id"])
@@ -192,9 +255,9 @@ class MarvinBot:
         # Register commands
         dp.add_handler(CommandHandler("start", self.start))
 
-        dp.add_handler(CommandHandler("postalink", partial(self.postalink, subreddit), Filters.reply))
+        dp.add_handler(CommandHandler("postlink", partial(self.postlink, subreddit), Filters.reply))
 
-        dp.add_handler(CommandHandler("comment", partial(self.comment, subreddit), Filters.reply))
+        dp.add_handler(CommandHandler("comment", self.comment, Filters.reply))
 
         # log all errors
         dp.add_error_handler(self.error_handler)
