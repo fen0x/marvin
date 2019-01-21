@@ -3,5 +3,6 @@
 venv/
 
 content/bot_data\.json
+content/cookies.pkl
 
 *.log

@@ -6,6 +6,7 @@ import requests
 import praw
 import io
 import datetime
+import pickle
 
 from lxml.html import fromstring
 from urllib import parse as urlparse
@@ -18,6 +19,7 @@ class MarvinBot:
     # The files to open on startup
     config_file_name = "content/bot_data.json"
     comment_file_name = "content/defaultComment.txt"
+    cookie_cache_file_name = "content/cookies.pkl"
 
     def __init__(self, logger_ref):
         # The subreddit where the bot must post
@@ -30,19 +32,28 @@ class MarvinBot:
         self.reddit = None
         # Logger Reference
         self.logger = logger_ref
+        # Requests session
+        self.session = None
 
     # ---------------------------------------------
     # Util functions
     # ---------------------------------------------
 
-    @staticmethod
-    def get_page_title_from_url(page_url: str):
+    def get_page_title_from_url(self, page_url: str):
         """
         Function that return the title of the given web page
         :param page_url: The page to get the title from
         :return: A string that contain the title of the given page
         """
-        r = requests.get(page_url)
+        r = self.session.get(page_url)
+
+        # Update cookie cache:
+        try:
+            with open(self.cookie_cache_file_name, "wb") as f:
+                pickle.dump(self.session.cookies, f)
+        except Exception as e:
+            self.logger.warning("Unable to update cached cookies!", exc_info=e)
+
         tree = fromstring(r.content)
         title = tree.findtext('.//title')
         if title is not None:
@@ -239,6 +250,19 @@ class MarvinBot:
         except FileNotFoundError:
             self.logger.error("FATAL ERROR-->" + self.comment_file_name + " FILE NOT FOUND, ABORTING...")
             quit(1)
+
+        # Setup requests session:
+        self.session = requests.Session()
+
+        # Load cached cookies
+        try:
+            with open(self.cookie_cache_file_name, "rb") as f:
+                self.session.cookies.update(pickle.load(f))
+        except:
+            self.logger.info("Unable to load cached cookies, creating new ones automatically.")
+
+        # Set custom UserAgent:
+        self.session.headers["User-Agent"] = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/537.36"
         # reddit login
         self.reddit = praw.Reddit(**bot_data_file["reddit"])
         # Read subreddit
