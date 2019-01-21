@@ -1,2 +1,2 @@
-Questo è un post automatico di un [bot sperimentale](https://github.com/fen0x/marvin) per l'integrazione del [canale telegram](https://telegram.me/italyinformatica) con il subreddit.
+Questo è un post automatico di un [bot sperimentale](https://github.com/fen0x/marvin) per l'integrazione del [gruppo telegram](https://t.me/ItalyInformatica) con il subreddit.
 Se avete domande o proposte di miglioramento, vi preghiamo di mandare un messaggio in [modmail](https://reddit.com/message/compose?to=/r/ItalyInformatica).
