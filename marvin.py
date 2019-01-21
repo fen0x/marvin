@@ -22,12 +22,14 @@ class MarvinBot:
     cookie_cache_file_name = "content/cookies.pkl"
 
     def __init__(self, logger_ref):
-        # The subreddit where the bot must post
+        # The subreddit where the bot must post (From JSON)
         self.subreddit_name = None
-        # The authorized group id, used to deny commands from other chats
+        # The authorized group id, used to deny commands from other chats (From JSON)
         self.authorized_group_id = None
-        # The default comment the bod will automatically add to every post submitted
+        # The default comment the bod will automatically add to every post submitted (From txt)
         self.default_comment_content = None
+        # The title prefix to use when submitting a post (From JSON)
+        self.title_prefix = None
         # Reference to the reddit instance
         self.reddit = None
         # Logger Reference
@@ -258,7 +260,7 @@ class MarvinBot:
         try:
             with open(self.cookie_cache_file_name, "rb") as f:
                 self.session.cookies.update(pickle.load(f))
-        except:
+        except FileNotFoundError:
             self.logger.info("Unable to load cached cookies, creating new ones automatically.")
 
         # Set custom UserAgent:
