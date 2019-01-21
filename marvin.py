@@ -149,7 +149,7 @@ class MarvinBot:
                 "Per usare questo comando devi rispondere ad un messaggio del bot contenente un link")
             return
         # Get the comment content, post id and post the comment
-        comment_text = "\\[From Telegram" + self.get_user_name(update.message) + "\\]:"
+        comment_text = "\\[Telegram - " + self.get_user_name(update.message) + "\\]  \n"
         comment_text += update.message.text_markdown.replace("/comment", "").strip()
         url = urls_entities.popitem()[1]
         cutted_url = self.get_post_id(url)
@@ -200,8 +200,8 @@ class MarvinBot:
         if not link_page_title:
             update.message.reply_text("Non sono riuscito a trovare il titolo della pagina")
             return
-        # Submit to reddit, add the default comment and dend the link to Telegram:
-        title = link_page_title + " [From Telegram" + self.get_user_name(update.message) + "]"
+        # Submit to reddit, add the default comment and send the link to Telegram:
+        title = "[" + self.title_prefix + self.get_user_name(update.message) + "] " + link_page_title
         submission = subreddit.submit(title, url=link_to_post)
         self.add_default_comment(submission)
         update.message.reply_text("Post creato: " + str(submission.shortlink))
@@ -247,7 +247,8 @@ class MarvinBot:
         self.logger.info("Connecting to subreddit:" + str(subreddit.display_name) + " - " + str(subreddit.title))
         # Read authorized group name
         self.authorized_group_id = int(bot_data_file["telegram"]["authorized_group_id"])
-
+        # Read the prefix to the post title
+        self.title_prefix = bot_data_file["reddit"]["title_prefix"]
         # Create the EventHandler and pass it your bot's token.
         self.logger.info("Starting bot... Logging in...")
         updater = Updater(bot_data_file["telegram"]["login_token"])

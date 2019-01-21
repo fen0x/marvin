@@ -9,6 +9,7 @@
     "client_secret": "",
     "user_agent": "",
     "username": "",
-    "password": ""
+    "password": "",
+    "title_prefix": "Telegram - "
   }
 }
