@@ -162,7 +162,7 @@ class MarvinBot:
                 "Per usare questo comando devi rispondere ad un messaggio del bot contenente un link")
             return
         # Get the comment content, post id and post the comment
-        comment_text = "\\[Telegram - " + self.get_user_name(update.message) + "\\]  \n"
+        comment_text = "\\[" + self.title_prefix + self.get_user_name(update.message) + "\\]  \n"
         comment_text += update.message.text_markdown.replace("/comment", "").strip()
         url = urls_entities.popitem()[1]
         cutted_url = self.get_post_id(url)
