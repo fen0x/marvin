@@ -8,6 +8,7 @@ import io
 import datetime
 import pickle
 
+from threading import Thread
 from lxml.html import fromstring
 from urllib import parse as urlparse
 from functools import partial
@@ -22,8 +23,8 @@ class MarvinBot:
     cookie_cache_file_name = "content/cookies.pkl"
 
     def __init__(self, logger_ref):
-        # The subreddit where the bot must post (From JSON)
-        self.subreddit_name = None
+        # The subreddit where the bot must post
+        self.subreddit = None
         # The authorized group id, used to deny commands from other chats (From JSON)
         self.authorized_group_id = None
         # The default comment the bod will automatically add to every post submitted (From txt)
@@ -36,6 +37,8 @@ class MarvinBot:
         self.logger = logger_ref
         # Requests session
         self.session = None
+        # Telegram Updater - telegram.ext.Updater
+        self.updater = None
 
     # ---------------------------------------------
     # Util functions
@@ -221,6 +224,20 @@ class MarvinBot:
         self.logger.info("New post submitted")
 
     # ---------------------------------------------
+    # Threads
+    # ---------------------------------------------
+
+    def check_new_reddit_posts(self):
+        """
+        This function listen for new post being submitted in the connected subreddit
+        When a new post appear, it send a Telegram message in the authorized group
+        """
+        bot_ref = self.updater.bot
+        self.logger.info("check_new_reddit_posts thread started")
+        for submission in self.subreddit.stream.submissions(skip_existing=True):
+            bot_ref.send_message(self.authorized_group_id, submission.title + " - " + submission.shortlink)
+
+    # ---------------------------------------------
     # Bot Start and Error manager
     # ---------------------------------------------
 
@@ -268,36 +285,39 @@ class MarvinBot:
         # reddit login
         self.reddit = praw.Reddit(**bot_data_file["reddit"])
         # Read subreddit
-        self.subreddit_name = bot_data_file["reddit"]["subreddit_name"]
-        subreddit = self.reddit.subreddit(self.subreddit_name)
-        self.logger.info("Connecting to subreddit:" + str(subreddit.display_name) + " - " + str(subreddit.title))
+        subreddit_name = bot_data_file["reddit"]["subreddit_name"]
+        self.subreddit = self.reddit.subreddit(subreddit_name)
+        self.logger.info("Connecting to subreddit:" + str(self.subreddit.display_name) + " - " + str(self.subreddit.title))
         # Read authorized group name
         self.authorized_group_id = int(bot_data_file["telegram"]["authorized_group_id"])
         # Read the prefix to the post title
         self.title_prefix = bot_data_file["reddit"]["title_prefix"]
         # Create the EventHandler and pass it your bot's token.
         self.logger.info("Starting bot... Logging in...")
-        updater = Updater(bot_data_file["telegram"]["login_token"])
+        self.updater = Updater(bot_data_file["telegram"]["login_token"])
         self.logger.info("Starting bot... Setting handler...")
         # Get the dispatcher to register handlers
-        dp = updater.dispatcher
+        dp = self.updater.dispatcher
 
         # Register commands
         dp.add_handler(CommandHandler("start", self.start))
 
-        dp.add_handler(CommandHandler("postlink", partial(self.postlink, subreddit), Filters.reply))
+        dp.add_handler(CommandHandler("postlink", partial(self.postlink, self.subreddit), Filters.reply))
 
         dp.add_handler(CommandHandler("comment", self.comment, Filters.reply))
 
         # log all errors
         dp.add_error_handler(self.error_handler)
 
-        # Start the Bot
-        updater.start_polling()
+        # Start the Bot and the important threads
+        self.updater.start_polling()
+
+        new_reddit_posts_thread = Thread(target=self.check_new_reddit_posts, args=[])
+        new_reddit_posts_thread.start()
 
         self.logger.info("Starting bot... Bot ready!")
 
-        updater.idle()
+        self.updater.idle()
 
 
 if __name__ == '__main__':
