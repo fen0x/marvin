@@ -82,18 +82,6 @@ class MarvinBot:
             return False
 
     @staticmethod
-    def get_post_id(post_url: str):
-        """
-        This function return the post id from the given url
-        :param post_url: The reddit post url (usually shorted, "like https://redd.it/ddddd")
-        :return: The post ID, in the example above "ddddd"
-        """
-        if post_url.endswith('/'):
-            post_url = post_url[:-1]
-        end_pos = post_url.rfind('/') + 1
-        return post_url[end_pos:]
-
-    @staticmethod
     def get_user_name(message):
         """
         Get the best user name from Telegram
@@ -149,11 +137,6 @@ class MarvinBot:
         if not self.is_message_in_correct_group(update.message.chat):
             update.message.reply_text("Spiacente, questo bot funziona solo nel gruppo autorizzato")
             return
-        # Check if the reply message is from the bot
-        if bot.id != update.message.reply_to_message.from_user.id:
-            update.message.reply_text(
-                "Per usare questo comando devi rispondere ad un messaggio del bot, non di altri utenti")
-            return
         # Check if the command has been used from an administrator
         if not self.is_sender_admin(bot, update.message.chat.id, update.message.from_user.id):
             update.message.reply_text("Spiacente, non sei un amministratore.")
@@ -168,7 +151,12 @@ class MarvinBot:
         comment_text = "\\[" + self.title_prefix + self.get_user_name(update.message) + "\\]  \n"
         comment_text += update.message.text_markdown.replace("/comment", "").strip()
         url = urls_entities.popitem()[1]
-        cutted_url = self.get_post_id(url)
+        try:
+            cutted_url = praw.models.Submission.id_from_url(url)
+        except praw.exceptions.ClientException:
+            update.message.reply_text(
+                "Il link a cui hai risposto non è un link di reddit valido")
+            return
         submission = self.reddit.submission(id=cutted_url)
         submission.reply(comment_text)
         update.message.reply_text("Il tuo commento è stato aggiunto al post!")
