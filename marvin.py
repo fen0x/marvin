@@ -158,9 +158,14 @@ class MarvinBot:
                 "Il link a cui hai risposto non è un link di reddit valido")
             return
         submission = self.reddit.submission(id=cutted_url)
-        submission.reply(comment_text)
-        update.message.reply_text("Il tuo commento è stato aggiunto al post!")
-        self.logger.info("Comment added to post with id:" + str(cutted_url))
+        if submission.subreddit.display_name == self.subreddit.display_name:
+            submission.reply(comment_text)
+            update.message.reply_text("Il tuo commento è stato aggiunto al post!")
+            self.logger.info("Comment added to post with id:" + str(cutted_url))
+        else:
+            update.message.reply_text(
+                "Non puoi inviare commenti a post che non appartengono al subbredit: " + self.subreddit.display_name)
+            return
 
     def postlink(self, subreddit, bot, update):
         """ (Telegram command)
@@ -269,13 +274,15 @@ class MarvinBot:
             self.logger.info("Unable to load cached cookies, creating new ones automatically.")
 
         # Set custom UserAgent:
-        self.session.headers["User-Agent"] = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/537.36"
+        self.session.headers[
+            "User-Agent"] = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/537.36"
         # reddit login
         self.reddit = praw.Reddit(**bot_data_file["reddit"])
         # Read subreddit
         subreddit_name = bot_data_file["reddit"]["subreddit_name"]
         self.subreddit = self.reddit.subreddit(subreddit_name)
-        self.logger.info("Connecting to subreddit:" + str(self.subreddit.display_name) + " - " + str(self.subreddit.title))
+        self.logger.info(
+            "Connecting to subreddit:" + str(self.subreddit.display_name) + " - " + str(self.subreddit.title))
         # Read authorized group name
         self.authorized_group_id = int(bot_data_file["telegram"]["authorized_group_id"])
         # Read the prefix to the post title
