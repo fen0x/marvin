@@ -214,7 +214,7 @@ class MarvinBot:
             update.message.reply_text("Non sono riuscito a trovare il titolo della pagina")
             return
         # Submit to reddit, add the default comment and send the link to Telegram:
-        title = "[" + self.title_prefix + self.get_user_name(update.message) + "] " + link_page_title
+        title = "[" + self.title_prefix + self.get_user_name(message) + "] " + link_page_title
         submission = subreddit.submit(title, url=link_to_post)
         self.add_default_comment(submission)
         update.message.reply_text("Post creato: " + str(submission.shortlink))
