@@ -1,7 +1,8 @@
 {
   "telegram": {
     "login_token": "TOKEN",
-    "authorized_group_id": 0
+    "authorized_group_id": 0,
+    "admin_group_id": 0
   },
   "reddit": {
     "subreddit_name": "ItalyInformaticaTest",

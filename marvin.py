@@ -27,6 +27,8 @@ class MarvinBot:
         self.subreddit = None
         # The authorized group id, used to deny commands from other chats (From JSON)
         self.authorized_group_id = None
+        # The admin group id, used to send new post notification to them (From JSON)
+        self.admin_group_id = None
         # The default comment the bod will automatically add to every post submitted (From txt)
         self.default_comment_content = None
         # The title prefix to use when submitting a post (From JSON)
@@ -39,6 +41,8 @@ class MarvinBot:
         self.session = None
         # Telegram Updater - telegram.ext.Updater
         self.updater = None
+        # List used to avoid notification on telegram created posts
+        self.created_posts = []
 
     # ---------------------------------------------
     # Util functions
@@ -212,6 +216,7 @@ class MarvinBot:
         # Submit to reddit, add the default comment and send the link to Telegram:
         title = "[" + self.title_prefix + self.get_user_name(message) + "] " + link_page_title
         submission = subreddit.submit(title, url=link_to_post)
+        self.created_posts.append(submission.id)
         self.add_default_comment(submission)
         update.message.reply_text("Post creato: " + str(submission.shortlink))
         self.logger.info("New post submitted")
@@ -228,7 +233,16 @@ class MarvinBot:
         bot_ref = self.updater.bot
         self.logger.info("check_new_reddit_posts thread started")
         for submission in self.subreddit.stream.submissions(skip_existing=True):
-            bot_ref.send_message(self.authorized_group_id, submission.title + " - " + submission.shortlink)
+            notification_content = submission.title + "\n" + \
+                                   "Postato da:" + submission.author.name + "\n" + \
+                                   submission.shortlink
+            # Send admin notification
+            bot_ref.send_message(self.admin_group_id, notification_content)
+            # Send notification to everyone in the group
+            if submission.id in self.created_posts:
+                self.created_posts.remove(submission.id)
+            else:
+                bot_ref.send_message(self.authorized_group_id, submission.title + "\n" + submission.shortlink)
 
     # ---------------------------------------------
     # Bot Start and Error manager
@@ -285,6 +299,7 @@ class MarvinBot:
             "Connecting to subreddit:" + str(self.subreddit.display_name) + " - " + str(self.subreddit.title))
         # Read authorized group name
         self.authorized_group_id = int(bot_data_file["telegram"]["authorized_group_id"])
+        self.admin_group_id = int(bot_data_file["telegram"]["admin_group_id"])
         # Read the prefix to the post title
         self.title_prefix = bot_data_file["reddit"]["title_prefix"]
         # Create the EventHandler and pass it your bot's token.
