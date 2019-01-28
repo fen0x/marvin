@@ -27,9 +27,9 @@ class MarvinBot:
         self.subreddit = None
         # The authorized group id, used to deny commands from other chats (From JSON)
         self.authorized_group_id = None
-        # The admin group id, used to send new post notification to them (From JSON)
+        # The admin group id, used to send all new post notification to them (From JSON)
         self.admin_group_id = None
-        # The default comment the bod will automatically add to every post submitted (From txt)
+        # The default comment the bot will automatically add to every post submitted (From txt)
         self.default_comment_content = None
         # The title prefix to use when submitting a post (From JSON)
         self.title_prefix = None
@@ -129,7 +129,7 @@ class MarvinBot:
 
     def comment(self, bot, update):
         """ (Telegram command)
-        Adds a comment to a previously posted post
+        Adds a comment to a reddit post (only if it belong to the authorized subreddit)
         :param bot: an object that represents a Telegram Bot.
         :param update: an object that represents an incoming update.
         """
@@ -186,9 +186,9 @@ class MarvinBot:
         if not self.is_sender_admin(bot, update.message.chat.id, update.message.from_user.id):
             update.message.reply_text("Spiacente, non sei un amministratore.")
             return
-        message = update.message.reply_to_message
+        reply_message = update.message.reply_to_message
 
-        urls_entities = message.parse_entities([MessageEntity.URL])
+        urls_entities = reply_message.parse_entities([MessageEntity.URL])
         if not urls_entities:
             update.message.reply_text("Il messaggio originale deve contenere una URL")
             return
@@ -210,12 +210,50 @@ class MarvinBot:
             update.message.reply_text("Non sono riuscito a trovare il titolo della pagina")
             return
         # Submit to reddit, add the default comment and send the link to Telegram:
-        title = "[" + self.title_prefix + self.get_user_name(message) + "] " + link_page_title
+        title = "[" + self.title_prefix + self.get_user_name(reply_message) + "] " + link_page_title
         submission = subreddit.submit(title, url=link_to_post)
         self.created_posts.append(submission.id)
         self.add_default_comment(submission)
         update.message.reply_text("Post creato: " + str(submission.shortlink))
-        self.logger.info("New post submitted")
+        self.logger.info("New link-post submitted")
+
+    def posttext(self, subreddit, bot, update):
+        """ (Telegram command)
+        Given a text and a title (from an admin) it create a text post in the subreddit
+        :param subreddit: The subreddit where the bot should post the content
+        :param bot: an object that represents a Telegram Bot.
+        :param update: an object that represents an incoming update.
+        """
+        # Check if the command is used as reply to another message
+        if not update.message.reply_to_message:
+            update.message.reply_text("Per usare questo comando devi rispondere ad un messaggio")
+            return
+        # Check if the command has been used in the correct group
+        if not self.is_message_in_correct_group(update.message.chat):
+            update.message.reply_text("Spiacente, questo bot funziona solo nel gruppo autorizzato")
+            return
+        # Check if the command has been used from an administrator
+        if not self.is_sender_admin(bot, update.message.chat.id, update.message.from_user.id):
+            update.message.reply_text("Spiacente, non sei un amministratore.")
+            return
+        reply_message = update.message.reply_to_message
+
+        question_title = "[" + self.title_prefix + self.get_user_name(reply_message) + "] "
+        admin_post_title = update.message.text_markdown.replace("/posttext", "").strip()
+        if len(admin_post_title) < 5:
+            update.message.reply_text("Utilizzando il comando, aggiungi un titolo al post:\n/posttext <titolo>")
+            return
+        else:
+            question_title += admin_post_title
+
+        question_content = reply_message.text_markdown
+
+        # Submit to reddit, add the default comment and send the link to Telegram:
+        submission = subreddit.submit(question_title, selftext=question_content)
+        self.created_posts.append(submission.id)
+        self.add_default_comment(submission)
+        update.message.reply_text("Post creato: " + str(submission.shortlink))
+        self.logger.info("New text-post submitted")
 
     # ---------------------------------------------
     # Threads
@@ -234,7 +272,7 @@ class MarvinBot:
                                    submission.shortlink
             # Send admin notification
             bot_ref.send_message(self.admin_group_id, notification_content)
-            # Send notification to everyone in the group
+            # Send notification to everyone in the authorized group
             if submission.id in self.created_posts:
                 self.created_posts.remove(submission.id)
             else:
@@ -309,6 +347,8 @@ class MarvinBot:
         dp.add_handler(CommandHandler("start", self.start))
 
         dp.add_handler(CommandHandler("postlink", partial(self.postlink, self.subreddit), Filters.reply))
+
+        dp.add_handler(CommandHandler("posttext", partial(self.posttext, self.subreddit), Filters.reply))
 
         dp.add_handler(CommandHandler("comment", self.comment, Filters.reply))
 
