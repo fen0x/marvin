@@ -96,7 +96,7 @@ class MarvinBot:
         if user.username is not None:
             return '@' + user.username
         else:
-            return ' - ' + user.full_name
+            return user.full_name
 
     def is_message_in_correct_group(self, chat: Chat):
         """
@@ -140,10 +140,6 @@ class MarvinBot:
         # Check if the command has been used in the correct group
         if not self.is_message_in_correct_group(update.message.chat):
             update.message.reply_text("Spiacente, questo bot funziona solo nel gruppo autorizzato")
-            return
-        # Check if the command has been used from an administrator
-        if not self.is_sender_admin(bot, update.message.chat.id, update.message.from_user.id):
-            update.message.reply_text("Spiacente, non sei un amministratore.")
             return
         # Check that the message has the url
         urls_entities = update.message.reply_to_message.parse_entities([MessageEntity.URL])
