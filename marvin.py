@@ -164,7 +164,7 @@ class MarvinBot:
             self.logger.info("Comment added to post with id:" + str(cutted_url))
         else:
             update.message.reply_text(
-                "Non puoi inviare commenti a post che non appartengono al subbredit: " + self.subreddit.display_name)
+                "Non puoi inviare commenti a post che non appartengono al subreddit: " + self.subreddit.display_name)
             return
 
     def postlink(self, subreddit, bot, update):
