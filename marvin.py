@@ -8,6 +8,7 @@ import io
 import datetime
 import pickle
 
+from threading import Thread
 from lxml.html import fromstring
 from urllib import parse as urlparse
 from functools import partial
@@ -22,11 +23,13 @@ class MarvinBot:
     cookie_cache_file_name = "content/cookies.pkl"
 
     def __init__(self, logger_ref):
-        # The subreddit where the bot must post (From JSON)
-        self.subreddit_name = None
+        # The subreddit where the bot must post
+        self.subreddit = None
         # The authorized group id, used to deny commands from other chats (From JSON)
         self.authorized_group_id = None
-        # The default comment the bod will automatically add to every post submitted (From txt)
+        # The admin group id, used to send all new post notification to them (From JSON)
+        self.admin_group_id = None
+        # The default comment the bot will automatically add to every post submitted (From txt)
         self.default_comment_content = None
         # The title prefix to use when submitting a post (From JSON)
         self.title_prefix = None
@@ -36,6 +39,10 @@ class MarvinBot:
         self.logger = logger_ref
         # Requests session
         self.session = None
+        # Telegram Updater - telegram.ext.Updater
+        self.updater = None
+        # List used to avoid notification on telegram created posts
+        self.created_posts = []
 
     # ---------------------------------------------
     # Util functions
@@ -79,18 +86,6 @@ class MarvinBot:
             return False
 
     @staticmethod
-    def get_post_id(post_url: str):
-        """
-        This function return the post id from the given url
-        :param post_url: The reddit post url (usually shorted, "like https://redd.it/ddddd")
-        :return: The post ID, in the example above "ddddd"
-        """
-        if post_url.endswith('/'):
-            post_url = post_url[:-1]
-        end_pos = post_url.rfind('/') + 1
-        return post_url[end_pos:]
-
-    @staticmethod
     def get_user_name(message):
         """
         Get the best user name from Telegram
@@ -101,7 +96,7 @@ class MarvinBot:
         if user.username is not None:
             return '@' + user.username
         else:
-            return ' - ' + user.full_name
+            return user.full_name
 
     def is_message_in_correct_group(self, chat: Chat):
         """
@@ -134,7 +129,7 @@ class MarvinBot:
 
     def comment(self, bot, update):
         """ (Telegram command)
-        Adds a comment to a previously posted post
+        Adds a comment to a reddit post (only if it belong to the authorized subreddit)
         :param bot: an object that represents a Telegram Bot.
         :param update: an object that represents an incoming update.
         """
@@ -146,15 +141,6 @@ class MarvinBot:
         if not self.is_message_in_correct_group(update.message.chat):
             update.message.reply_text("Spiacente, questo bot funziona solo nel gruppo autorizzato")
             return
-        # Check if the reply message is from the bot
-        if bot.id != update.message.reply_to_message.from_user.id:
-            update.message.reply_text(
-                "Per usare questo comando devi rispondere ad un messaggio del bot, non di altri utenti")
-            return
-        # Check if the command has been used from an administrator
-        if not self.is_sender_admin(bot, update.message.chat.id, update.message.from_user.id):
-            update.message.reply_text("Spiacente, non sei un amministratore.")
-            return
         # Check that the message has the url
         urls_entities = update.message.reply_to_message.parse_entities([MessageEntity.URL])
         if not urls_entities:
@@ -165,11 +151,21 @@ class MarvinBot:
         comment_text = "\\[" + self.title_prefix + self.get_user_name(update.message) + "\\]  \n"
         comment_text += update.message.text_markdown.replace("/comment", "").strip()
         url = urls_entities.popitem()[1]
-        cutted_url = self.get_post_id(url)
+        try:
+            cutted_url = praw.models.Submission.id_from_url(url)
+        except praw.exceptions.ClientException:
+            update.message.reply_text(
+                "Il link a cui hai risposto non è un link di reddit valido")
+            return
         submission = self.reddit.submission(id=cutted_url)
-        submission.reply(comment_text)
-        update.message.reply_text("Il tuo commento è stato aggiunto al post!")
-        self.logger.info("Comment added to post with id:" + str(cutted_url))
+        if submission.subreddit.display_name == self.subreddit.display_name:
+            submission.reply(comment_text)
+            update.message.reply_text("Il tuo commento è stato aggiunto al post!")
+            self.logger.info("Comment added to post with id:" + str(cutted_url))
+        else:
+            update.message.reply_text(
+                "Non puoi inviare commenti a post che non appartengono al subbredit: " + self.subreddit.display_name)
+            return
 
     def postlink(self, subreddit, bot, update):
         """ (Telegram command)
@@ -190,9 +186,9 @@ class MarvinBot:
         if not self.is_sender_admin(bot, update.message.chat.id, update.message.from_user.id):
             update.message.reply_text("Spiacente, non sei un amministratore.")
             return
-        message = update.message.reply_to_message
+        reply_message = update.message.reply_to_message
 
-        urls_entities = message.parse_entities([MessageEntity.URL])
+        urls_entities = reply_message.parse_entities([MessageEntity.URL])
         if not urls_entities:
             update.message.reply_text("Il messaggio originale deve contenere una URL")
             return
@@ -214,11 +210,73 @@ class MarvinBot:
             update.message.reply_text("Non sono riuscito a trovare il titolo della pagina")
             return
         # Submit to reddit, add the default comment and send the link to Telegram:
-        title = "[" + self.title_prefix + self.get_user_name(update.message) + "] " + link_page_title
+        title = "[" + self.title_prefix + self.get_user_name(reply_message) + "] " + link_page_title
         submission = subreddit.submit(title, url=link_to_post)
+        self.created_posts.append(submission.id)
         self.add_default_comment(submission)
         update.message.reply_text("Post creato: " + str(submission.shortlink))
-        self.logger.info("New post submitted")
+        self.logger.info("New link-post submitted")
+
+    def posttext(self, subreddit, bot, update):
+        """ (Telegram command)
+        Given a text and a title (from an admin) it create a text post in the subreddit
+        :param subreddit: The subreddit where the bot should post the content
+        :param bot: an object that represents a Telegram Bot.
+        :param update: an object that represents an incoming update.
+        """
+        # Check if the command is used as reply to another message
+        if not update.message.reply_to_message:
+            update.message.reply_text("Per usare questo comando devi rispondere ad un messaggio")
+            return
+        # Check if the command has been used in the correct group
+        if not self.is_message_in_correct_group(update.message.chat):
+            update.message.reply_text("Spiacente, questo bot funziona solo nel gruppo autorizzato")
+            return
+        # Check if the command has been used from an administrator
+        if not self.is_sender_admin(bot, update.message.chat.id, update.message.from_user.id):
+            update.message.reply_text("Spiacente, non sei un amministratore.")
+            return
+        reply_message = update.message.reply_to_message
+
+        question_title = "[" + self.title_prefix + self.get_user_name(reply_message) + "] "
+        admin_post_title = update.message.text_markdown.replace("/posttext", "").strip()
+        if len(admin_post_title) < 5:
+            update.message.reply_text("Utilizzando il comando, aggiungi un titolo al post:\n/posttext <titolo>")
+            return
+        else:
+            question_title += admin_post_title
+
+        question_content = reply_message.text_markdown
+
+        # Submit to reddit, add the default comment and send the link to Telegram:
+        submission = subreddit.submit(question_title, selftext=question_content)
+        self.created_posts.append(submission.id)
+        self.add_default_comment(submission)
+        update.message.reply_text("Post creato: " + str(submission.shortlink))
+        self.logger.info("New text-post submitted")
+
+    # ---------------------------------------------
+    # Threads
+    # ---------------------------------------------
+
+    def check_new_reddit_posts(self):
+        """
+        This function listen for new post being submitted in the connected subreddit
+        When a new post appear, it send a Telegram message in the authorized group
+        """
+        bot_ref = self.updater.bot
+        self.logger.info("check_new_reddit_posts thread started")
+        for submission in self.subreddit.stream.submissions(skip_existing=True):
+            notification_content = submission.title + "\n" + \
+                                   "Postato da:" + submission.author.name + "\n" + \
+                                   submission.shortlink
+            # Send admin notification
+            bot_ref.send_message(self.admin_group_id, notification_content)
+            # Send notification to everyone in the authorized group
+            if submission.id in self.created_posts:
+                self.created_posts.remove(submission.id)
+            else:
+                bot_ref.send_message(self.authorized_group_id, submission.title + "\n" + submission.shortlink)
 
     # ---------------------------------------------
     # Bot Start and Error manager
@@ -264,40 +322,48 @@ class MarvinBot:
             self.logger.info("Unable to load cached cookies, creating new ones automatically.")
 
         # Set custom UserAgent:
-        self.session.headers["User-Agent"] = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/537.36"
+        self.session.headers[
+            "User-Agent"] = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/537.36"
         # reddit login
         self.reddit = praw.Reddit(**bot_data_file["reddit"])
         # Read subreddit
-        self.subreddit_name = bot_data_file["reddit"]["subreddit_name"]
-        subreddit = self.reddit.subreddit(self.subreddit_name)
-        self.logger.info("Connecting to subreddit:" + str(subreddit.display_name) + " - " + str(subreddit.title))
+        subreddit_name = bot_data_file["reddit"]["subreddit_name"]
+        self.subreddit = self.reddit.subreddit(subreddit_name)
+        self.logger.info(
+            "Connecting to subreddit:" + str(self.subreddit.display_name) + " - " + str(self.subreddit.title))
         # Read authorized group name
         self.authorized_group_id = int(bot_data_file["telegram"]["authorized_group_id"])
+        self.admin_group_id = int(bot_data_file["telegram"]["admin_group_id"])
         # Read the prefix to the post title
         self.title_prefix = bot_data_file["reddit"]["title_prefix"]
         # Create the EventHandler and pass it your bot's token.
         self.logger.info("Starting bot... Logging in...")
-        updater = Updater(bot_data_file["telegram"]["login_token"])
+        self.updater = Updater(bot_data_file["telegram"]["login_token"])
         self.logger.info("Starting bot... Setting handler...")
         # Get the dispatcher to register handlers
-        dp = updater.dispatcher
+        dp = self.updater.dispatcher
 
         # Register commands
         dp.add_handler(CommandHandler("start", self.start))
 
-        dp.add_handler(CommandHandler("postlink", partial(self.postlink, subreddit), Filters.reply))
+        dp.add_handler(CommandHandler("postlink", partial(self.postlink, self.subreddit), Filters.reply))
+
+        dp.add_handler(CommandHandler("posttext", partial(self.posttext, self.subreddit), Filters.reply))
 
         dp.add_handler(CommandHandler("comment", self.comment, Filters.reply))
 
         # log all errors
         dp.add_error_handler(self.error_handler)
 
-        # Start the Bot
-        updater.start_polling()
+        # Start the Bot and the important threads
+        self.updater.start_polling()
+
+        new_reddit_posts_thread = Thread(target=self.check_new_reddit_posts, args=[])
+        new_reddit_posts_thread.start()
 
         self.logger.info("Starting bot... Bot ready!")
 
-        updater.idle()
+        self.updater.idle()
 
 
 if __name__ == '__main__':
