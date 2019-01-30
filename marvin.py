@@ -20,6 +20,7 @@ class MarvinBot:
     # The files to open on startup
     config_file_name = "content/bot_data.json"
     comment_file_name = "content/defaultComment.txt"
+    rules_file_name = "content/delete_post_rules.json"
     cookie_cache_file_name = "content/cookies.pkl"
 
     def __init__(self, logger_ref):
@@ -35,6 +36,8 @@ class MarvinBot:
         self.title_prefix = None
         # Reference to the reddit instance
         self.reddit = None
+        # Dictionary used to contain all the rules used when deleting a post
+        self.rules = {}
         # Logger Reference
         self.logger = logger_ref
         # Requests session
@@ -148,7 +151,10 @@ class MarvinBot:
                 "Per usare questo comando devi rispondere ad un messaggio del bot contenente un link")
             return
         # Get the comment content, post id and post the comment
-        comment_text = "\\[" + self.title_prefix + self.get_user_name(update.message) + "\\]  \n"
+        comment_text = "\\[[Telegram](https://t.me/ItalyInformatica/" + str(update.message.message_id) + "/)"
+        username = self.get_user_name(update.message)
+        comment_text += " - "
+        comment_text += "[" + username + "](https://t.me/" + username[1:] + ")" + "\\]  \n"
         comment_text += update.message.text_markdown.replace("/comment", "").strip()
         url = urls_entities.popitem()[1]
         try:
@@ -159,9 +165,16 @@ class MarvinBot:
             return
         submission = self.reddit.submission(id=cutted_url)
         if submission.subreddit.display_name == self.subreddit.display_name:
-            submission.reply(comment_text)
-            update.message.reply_text("Il tuo commento è stato aggiunto al post!")
-            self.logger.info("Comment added to post with id:" + str(cutted_url))
+            if submission.locked:
+                update.message.reply_text(
+                    "Non puoi commentare un post lockato!")
+            else:
+                created_comment = submission.reply(comment_text)
+                comment_link = "https://www.reddit.com" + created_comment.permalink
+                update.message.reply_text(
+                    "Commento aggiunto al post! (da:" + self.get_user_name(
+                        update.message) + ")\n" + comment_link)
+                self.logger.info("Comment added to post with id:" + str(cutted_url))
         else:
             update.message.reply_text(
                 "Non puoi inviare commenti a post che non appartengono al subreddit: " + self.subreddit.display_name)
@@ -214,7 +227,8 @@ class MarvinBot:
         submission = subreddit.submit(title, url=link_to_post)
         self.created_posts.append(submission.id)
         self.add_default_comment(submission)
-        update.message.reply_text("Post creato: " + str(submission.shortlink))
+        update.message.reply_text(
+            "Post creato: " + str(submission.shortlink) + " (da:" + self.get_user_name(update.message) + ")")
         self.logger.info("New link-post submitted")
 
     def posttext(self, subreddit, bot, update):
@@ -252,8 +266,88 @@ class MarvinBot:
         submission = subreddit.submit(question_title, selftext=question_content)
         self.created_posts.append(submission.id)
         self.add_default_comment(submission)
-        update.message.reply_text("Post creato: " + str(submission.shortlink))
+        update.message.reply_text(
+            "Post creato: " + str(submission.shortlink) + " (da:" + self.get_user_name(update.message) + ")")
         self.logger.info("New text-post submitted")
+
+    def delrule(self, bot, update):
+        """ (Telegram command)
+        Delete a post from the subreddit, posting the reason as comment reading it from the rule dictionary
+        :param bot:  bot: an object that represents a Telegram Bot.
+        :param update: update: an object that represents an incoming update.
+        """
+        # Check if the command is used as reply to another message
+        if not update.message.reply_to_message:
+            update.message.reply_text("Per usare questo comando devi rispondere ad un messaggio")
+            return
+        # Check if the command has been used in the correct group
+        if not self.is_message_in_correct_group(update.message.chat):
+            update.message.reply_text("Spiacente, questo bot funziona solo nel gruppo autorizzato")
+            return
+        # Check if the command has been used from an administrator
+        if not self.is_sender_admin(bot, update.message.chat.id, update.message.from_user.id):
+            update.message.reply_text("Spiacente, non sei un amministratore.")
+            return
+        # Check that the message has the url
+        urls_entities = update.message.reply_to_message.parse_entities([MessageEntity.URL])
+        if not urls_entities:
+            update.message.reply_text(
+                "Per usare questo comando devi rispondere ad un messaggio del bot contenente un link")
+            return
+        # Get the rule content, post the comment and delete the post
+        url = urls_entities.popitem()[1]
+        try:
+            cutted_url = praw.models.Submission.id_from_url(url)
+        except praw.exceptions.ClientException:
+            update.message.reply_text(
+                "Il link a cui hai risposto non è un link di reddit valido")
+            return
+        splitted_message = update.message.text_markdown.replace("/delrule", "").strip().split()
+        note_message = None
+        rule_text = None
+        rule_number = -1
+        # Read the rule number
+        if len(splitted_message) == 0:
+            update.message.reply_text(
+                "Non hai fornito il numero di regola per rimuovere il post...")
+            return
+        elif len(splitted_message) >= 1:
+            try:
+                rule_number = int(splitted_message[0])
+            except ValueError:
+                update.message.reply_text(
+                    "Hai fornito un numero di regola non valido... Utilizza il comando con /delrule <numero regola> <note(opzionale>")
+                return
+            if rule_number not in self.rules:
+                update.message.reply_text(
+                    "Hai fornito un numero di regola non presente nella lista...")
+                return
+            rule_text = self.rules[rule_number]
+        # Read the note message if present
+        if len(splitted_message) > 1:
+            note_message = update.message.text_markdown.replace("/delrule", "").replace(str(rule_number), "").strip()
+        submission = self.reddit.submission(id=cutted_url)
+        if submission.subreddit.display_name == self.subreddit.display_name:
+            # Create delete comment
+            delete_coment = "Il tuo post è stato rimosso per la violazione del seguente articolo del regolamento:\n\n"
+            delete_coment += "* " + rule_text + "\n\n"
+            if note_message is not None:
+                delete_coment += note_message + "\n\n"
+            delete_coment += "Se hai dubbi o domande, ti preghiamo di inviare un messaggio in "
+            delete_coment += "[modmail](https://www.reddit.com/message/compose?to=%2Fr%2FItalyInformatica).\n\n"
+
+            # Send the comment, remove and lock the post
+            submission.reply(delete_coment)
+            mod_object = submission.mod
+            mod_object.remove()
+            mod_object.lock()
+            update.message.reply_text(
+                "Il post è stato cancellato! (da:" + self.get_user_name(update.message) + ")")
+            self.logger.info("Post with id:" + str(cutted_url) + " has been deleted from Telegram")
+        else:
+            update.message.reply_text(
+                "Non puoi cancellare post che non appartengono al subreddit: " + self.subreddit.display_name)
+            return
 
     # ---------------------------------------------
     # Threads
@@ -310,6 +404,15 @@ class MarvinBot:
         except FileNotFoundError:
             self.logger.error("FATAL ERROR-->" + self.comment_file_name + " FILE NOT FOUND, ABORTING...")
             quit(1)
+        # Read the rules used to delete a post
+        try:
+            with open(self.rules_file_name) as data_file:
+                rules_list = json.load(data_file)
+                for current_rule in rules_list["rules"]:
+                    self.rules[current_rule["number"]] = current_rule["text"]
+        except FileNotFoundError:
+            self.logger.error("FATAL ERROR-->" + self.config_file_name + " FILE NOT FOUND, ABORTING...")
+            quit(1)
 
         # Setup requests session:
         self.session = requests.Session()
@@ -349,6 +452,8 @@ class MarvinBot:
         dp.add_handler(CommandHandler("postlink", partial(self.postlink, self.subreddit), Filters.reply))
 
         dp.add_handler(CommandHandler("posttext", partial(self.posttext, self.subreddit), Filters.reply))
+
+        dp.add_handler(CommandHandler("delrule", self.delrule, Filters.reply))
 
         dp.add_handler(CommandHandler("comment", self.comment, Filters.reply))
 
