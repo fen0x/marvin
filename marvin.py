@@ -268,7 +268,7 @@ class MarvinBot:
         self.logger.info("check_new_reddit_posts thread started")
         for submission in self.subreddit.stream.submissions(skip_existing=True):
             notification_content = submission.title + "\n" + \
-                                   "Postato da:" + submission.author.name + "\n" + \
+                                   "Postato da: " + submission.author.name + "\n" + \
                                    submission.shortlink
             # Send admin notification
             bot_ref.send_message(self.admin_group_id, notification_content)
