@@ -1,0 +1,2 @@
+Questo è un post automatico di un [bot sperimentale](https://github.com/fen0x/marvin) per l'integrazione del [gruppo telegram](https://t.me/{TG_GROUP}{TG_MSG_ID}) con il subreddit.
+Se avete domande o proposte di miglioramento, vi preghiamo di mandare un messaggio in [modmail](https://reddit.com/message/compose?to=/r/{SUBREDDIT}).

@@ -19,8 +19,7 @@ from telegram.ext import CommandHandler, Filters, Updater
 class MarvinBot:
     # The files to open on startup
     config_file_name = "content/bot_data.json"
-    comment_file_name0 = "content/defaultComment0.txt"
-    comment_file_name1 = "content/defaultComment1.txt"
+    comment_file_name = "content/defaultComment.txt"
     rules_file_name = "content/delete_post_rules.json"
     cookie_cache_file_name = "content/cookies.pkl"
 
@@ -32,10 +31,11 @@ class MarvinBot:
         # The admin group id, used to send all new post notification to them (From JSON)
         self.admin_group_id = None
         # The default comment the bot will automatically add to every post submitted (From txt)
-        self.default_comment_content0 = None
-        self.default_comment_content1 = None
+        self.default_comment_content = None
         # The title prefix to use when submitting a post (From JSON)
         self.title_prefix = None
+        # Telegram public group's username
+        self.tg_group = None
         # Reference to the reddit instance
         self.reddit = None
         # Dictionary used to contain all the rules used when deleting a post
@@ -117,14 +117,17 @@ class MarvinBot:
         :param post_submission: The submitted post where the bot should add the comment
         :param tg_msg_id: The msg id of the message the original post come from
         """
+        string_to_send = self.default_comment_content
         if tg_msg_id is None:
-            comment = post_submission.reply(self.default_comment_content0 + self.default_comment_content1 + str(self.subreddit) + ").")
-            comment.mod.distinguish(sticky=True)
-            self.logger.info("Default comment sent!")
+            string_to_send = string_to_send.replace("{TG_MSG_ID}", "")
         else:
-            comment = post_submission.reply(self.default_comment_content0 + "/" + str(tg_msg_id) + self.default_comment_content1 + str(self.subreddit) + ").")
-            comment.mod.distinguish(sticky=True)
-            self.logger.info("Default comment sent!")
+            string_to_send = string_to_send.replace("{TG_MSG_ID}", "/" + str(tg_msg_id))
+        string_to_send = string_to_send.replace("{SUBREDDIT}", str(self.subreddit))
+        string_to_send = string_to_send.replace("{TG_GROUP}", str(self.tg_group))
+
+        comment = post_submission.reply(string_to_send)
+        comment.mod.distinguish(sticky=True)
+        self.logger.info("Default comment sent!")
 
 
     # ---------------------------------------------
@@ -160,7 +163,7 @@ class MarvinBot:
                 "Per usare questo comando devi rispondere ad un messaggio del bot contenente un link")
             return
         # Get the comment content, post id and post the comment
-        comment_text = "\\[[Telegram](https://t.me/ItalyInformatica/" + str(update.message.message_id) + "/)"
+        comment_text = "\\[[Telegram](https://t.me/" + str(self.tg_group) + "/" + str(update.message.message_id) + "/)"
         username = self.get_user_name(update.message)
         comment_text += " - "
         comment_text += "[" + username + "](https://t.me/" + username[1:] + ")" + "\\]  \n"
@@ -411,15 +414,8 @@ class MarvinBot:
             quit(1)
         # Read the default comment data
         try:
-            file = io.open(self.comment_file_name0, mode="r", encoding="utf-8")
-            self.default_comment_content0 = file.read()
-            file.close()
-        except FileNotFoundError:
-            self.logger.error("FATAL ERROR-->" + self.comment_file_name + " FILE NOT FOUND, ABORTING...")
-            quit(1)
-        try:
-            file = io.open(self.comment_file_name1, mode="r", encoding="utf-8")
-            self.default_comment_content1 = file.read()
+            file = io.open(self.comment_file_name, mode="r", encoding="utf-8")
+            self.default_comment_content = file.read()
             file.close()
         except FileNotFoundError:
             self.logger.error("FATAL ERROR-->" + self.comment_file_name + " FILE NOT FOUND, ABORTING...")
@@ -459,6 +455,7 @@ class MarvinBot:
         self.admin_group_id = int(bot_data_file["telegram"]["admin_group_id"])
         # Read the prefix to the post title
         self.title_prefix = bot_data_file["reddit"]["title_prefix"]
+        self.tg_group = bot_data_file["telegram"]["tg_group"]
         # Create the EventHandler and pass it your bot's token.
         self.logger.info("Starting bot... Logging in...")
         self.updater = Updater(bot_data_file["telegram"]["login_token"])
