@@ -239,8 +239,10 @@ class MarvinBot:
         submission = subreddit.submit(title, url=link_to_post)
         self.created_posts.append(submission.id)
         self.add_default_comment(submission, update.message.message_id)
-        update.message.reply_text(
-            "Post creato: " + str(submission.shortlink) + " (da:" + self.get_user_name(update.message) + ")")
+        self.updater.bot.send_message(self.authorized_group_id,
+                                      "Post creato: " + str(submission.shortlink) +
+                                      " (da: " + self.get_user_name(update.message) + ")",
+                                      reply_to_message_id=update.message.reply_to_message.message_id)
         self.logger.info("New link-post submitted")
 
     def posttext(self, subreddit, bot, update):
@@ -281,8 +283,10 @@ class MarvinBot:
         submission = subreddit.submit(question_title, selftext=question_content)
         self.created_posts.append(submission.id)
         self.add_default_comment(submission, update.message.message_id)
-        update.message.reply_text(
-            "Post creato: " + str(submission.shortlink) + " (da: " + self.get_user_name(update.message) + ")")
+        self.updater.bot.send_message(self.authorized_group_id,
+                                      "Post creato: " + str(submission.shortlink) +
+                                      " (da: " + self.get_user_name(update.message) + ")",
+                                      reply_to_message_id=update.message.reply_to_message.message_id)
         self.logger.info("New text-post submitted")
 
     def delrule(self, bot, update):
@@ -453,9 +457,9 @@ class MarvinBot:
         # Read authorized group name
         self.authorized_group_id = int(bot_data_file["telegram"]["authorized_group_id"])
         self.admin_group_id = int(bot_data_file["telegram"]["admin_group_id"])
+        self.tg_group = bot_data_file["telegram"]["tg_group"]
         # Read the prefix to the post title
         self.title_prefix = bot_data_file["reddit"]["title_prefix"]
-        self.tg_group = bot_data_file["telegram"]["tg_group"]
         # Create the EventHandler and pass it your bot's token.
         self.logger.info("Starting bot... Logging in...")
         self.updater = Updater(bot_data_file["telegram"]["login_token"])
