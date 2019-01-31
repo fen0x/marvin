@@ -183,9 +183,10 @@ class MarvinBot:
             else:
                 created_comment = submission.reply(comment_text)
                 comment_link = "https://www.reddit.com" + created_comment.permalink
-                update.message.reply_text(
-                    "Commento aggiunto al post! (da:" + self.get_user_name(
-                        update.message) + ")\n" + comment_link)
+                self.updater.bot.send_message(self.authorized_group_id,
+                                              "Commento aggiunto al post! (da: " + self.get_user_name(update.message)
+                                              + ")\n" + comment_link,
+                                              reply_to_message_id=update.message.reply_to_message.message_id)
                 self.logger.info("Comment added to post with id:" + str(cutted_url))
         else:
             update.message.reply_text(
@@ -360,8 +361,10 @@ class MarvinBot:
             mod_object = submission.mod
             mod_object.remove()
             mod_object.lock()
-            update.message.reply_text(
-                "Il post è stato cancellato! (da:" + self.get_user_name(update.message) + ")")
+            self.updater.bot.send_message(self.authorized_group_id,
+                                          "Il post è stato cancellato! (da: "
+                                          + self.get_user_name(update.message) + ")",
+                                          reply_to_message_id=update.message.reply_to_message.message_id)
             self.logger.info("Post with id:" + str(cutted_url) + " has been deleted from Telegram")
         else:
             update.message.reply_text(
