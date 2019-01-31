@@ -118,11 +118,11 @@ class MarvinBot:
         :param tg_msg_id: The msg id of the message the original post come from
         """
         if tg_msg_id is None:
-            comment = post_submission.reply(self.default_comment_content0 + self.default_comment_content1)
+            comment = post_submission.reply(self.default_comment_content0 + self.default_comment_content1 + str(self.subreddit) + ").")
             comment.mod.distinguish(sticky=True)
             self.logger.info("Default comment sent!")
         else:
-            comment = post_submission.reply(self.default_comment_content0 + "/" + str(tg_msg_id) + self.default_comment_content1)
+            comment = post_submission.reply(self.default_comment_content0 + "/" + str(tg_msg_id) + self.default_comment_content1 + str(self.subreddit) + ").")
             comment.mod.distinguish(sticky=True)
             self.logger.info("Default comment sent!")
 
@@ -346,7 +346,7 @@ class MarvinBot:
             if note_message is not None:
                 delete_coment += note_message + "\n\n"
             delete_coment += "Se hai dubbi o domande, ti preghiamo di inviare un messaggio in "
-            delete_coment += "[modmail](https://www.reddit.com/message/compose?to=%2Fr%2FItalyInformatica).\n\n"
+            delete_coment += "[modmail](https://www.reddit.com/message/compose?to=%2Fr%2F" + self.subreddit + ").\n\n"
 
             # Send the comment, remove and lock the post
             submission.reply(delete_coment)
@@ -377,7 +377,8 @@ class MarvinBot:
                                    "Postato da:" + submission.author.name + "\n" + \
                                    submission.shortlink
             # Send admin notification
-            bot_ref.send_message(self.admin_group_id, notification_content)
+            if self.admin_group_id != 0:
+                bot_ref.send_message(self.admin_group_id, notification_content)
             # Send notification to everyone in the authorized group
             if submission.id in self.created_posts:
                 self.created_posts.remove(submission.id)
