@@ -1,0 +1,16 @@
+{
+  "telegram": {
+    "login_token": "TOKEN",
+    "authorized_group_id": 0,
+    "admin_group_id": 0
+  },
+  "reddit": {
+    "subreddit_name": "ItalyInformaticaTest",
+    "client_id": "",
+    "client_secret": "",
+    "user_agent": "",
+    "username": "",
+    "password": "",
+    "title_prefix": "Telegram - "
+  }
+}
