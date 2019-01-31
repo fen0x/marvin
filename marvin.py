@@ -19,7 +19,8 @@ from telegram.ext import CommandHandler, Filters, Updater
 class MarvinBot:
     # The files to open on startup
     config_file_name = "content/bot_data.json"
-    comment_file_name = "content/defaultComment.txt"
+    comment_file_name0 = "content/defaultComment0.txt"
+    comment_file_name1 = "content/defaultComment1.txt"
     rules_file_name = "content/delete_post_rules.json"
     cookie_cache_file_name = "content/cookies.pkl"
 
@@ -31,7 +32,8 @@ class MarvinBot:
         # The admin group id, used to send all new post notification to them (From JSON)
         self.admin_group_id = None
         # The default comment the bot will automatically add to every post submitted (From txt)
-        self.default_comment_content = None
+        self.default_comment_content0 = None
+        self.default_comment_content1 = None
         # The title prefix to use when submitting a post (From JSON)
         self.title_prefix = None
         # Reference to the reddit instance
@@ -109,14 +111,21 @@ class MarvinBot:
         """
         return chat.id == self.authorized_group_id
 
-    def add_default_comment(self, post_submission):
+    def add_default_comment(self, post_submission, tg_msg_id):
         """
         Function that add the default comment to the given post submission
         :param post_submission: The submitted post where the bot should add the comment
+        :param tg_msg_id: The msg id of the message the original post come from
         """
-        comment = post_submission.reply(self.default_comment_content)
-        comment.mod.distinguish(sticky=True)
-        self.logger.info("Default comment sent!")
+        if tg_msg_id is None:
+            comment = post_submission.reply(self.default_comment_content0 + self.default_comment_content1)
+            comment.mod.distinguish(sticky=True)
+            self.logger.info("Default comment sent!")
+        else:
+            comment = post_submission.reply(self.default_comment_content0 + "/" + str(tg_msg_id) + self.default_comment_content1)
+            comment.mod.distinguish(sticky=True)
+            self.logger.info("Default comment sent!")
+
 
     # ---------------------------------------------
     # Bot commands
@@ -226,7 +235,7 @@ class MarvinBot:
         title = "[" + self.title_prefix + self.get_user_name(reply_message) + "] " + link_page_title
         submission = subreddit.submit(title, url=link_to_post)
         self.created_posts.append(submission.id)
-        self.add_default_comment(submission)
+        self.add_default_comment(submission, update.message.message_id)
         update.message.reply_text(
             "Post creato: " + str(submission.shortlink) + " (da:" + self.get_user_name(update.message) + ")")
         self.logger.info("New link-post submitted")
@@ -254,8 +263,11 @@ class MarvinBot:
 
         question_title = "[" + self.title_prefix + self.get_user_name(reply_message) + "] "
         admin_post_title = update.message.text_markdown.replace("/posttext", "").strip()
-        if len(admin_post_title) < 5:
+        if len(admin_post_title) < 1:
             update.message.reply_text("Utilizzando il comando, aggiungi un titolo al post:\n/posttext <titolo>")
+            return
+        elif len(admin_post_title) < 6:
+            update.message.reply_text("Serve un titolo più lungo! Riprova")
             return
         else:
             question_title += admin_post_title
@@ -265,9 +277,9 @@ class MarvinBot:
         # Submit to reddit, add the default comment and send the link to Telegram:
         submission = subreddit.submit(question_title, selftext=question_content)
         self.created_posts.append(submission.id)
-        self.add_default_comment(submission)
+        self.add_default_comment(submission, update.message.message_id)
         update.message.reply_text(
-            "Post creato: " + str(submission.shortlink) + " (da:" + self.get_user_name(update.message) + ")")
+            "Post creato: " + str(submission.shortlink) + " (da: " + self.get_user_name(update.message) + ")")
         self.logger.info("New text-post submitted")
 
     def delrule(self, bot, update):
@@ -398,8 +410,15 @@ class MarvinBot:
             quit(1)
         # Read the default comment data
         try:
-            file = io.open(self.comment_file_name, mode="r", encoding="utf-8")
-            self.default_comment_content = file.read()
+            file = io.open(self.comment_file_name0, mode="r", encoding="utf-8")
+            self.default_comment_content0 = file.read()
+            file.close()
+        except FileNotFoundError:
+            self.logger.error("FATAL ERROR-->" + self.comment_file_name + " FILE NOT FOUND, ABORTING...")
+            quit(1)
+        try:
+            file = io.open(self.comment_file_name1, mode="r", encoding="utf-8")
+            self.default_comment_content1 = file.read()
             file.close()
         except FileNotFoundError:
             self.logger.error("FATAL ERROR-->" + self.comment_file_name + " FILE NOT FOUND, ABORTING...")
