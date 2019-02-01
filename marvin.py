@@ -38,6 +38,8 @@ class MarvinBot:
         self.tg_group = None
         # Reference to the reddit instance
         self.reddit = None
+        # Reddit username
+        self.reddit_bot = None
         # Dictionary used to contain all the rules used when deleting a post
         self.rules = {}
         # Logger Reference
@@ -46,8 +48,8 @@ class MarvinBot:
         self.session = None
         # Telegram Updater - telegram.ext.Updater
         self.updater = None
-        # List used to avoid notification on telegram created posts
-        self.created_posts = []
+        # Groups in which messages come from
+        self.tg_groups = {}
 
     # ---------------------------------------------
     # Util functions
@@ -76,15 +78,15 @@ class MarvinBot:
             return None
 
     @staticmethod
-    def is_sender_admin(bot, chat_id: int, user: User):
+    def is_sender_admin(bot, chat_id: int, user_id: int):
         """
         Function that return if the given user is an admin in the given chat
         :param bot: The current bot instance
         :param chat_id: The id of the chat
-        :param user: The user to check
+        :param user_id: The id of user to check
         :return: True if the user is an admin in the given chat, False otherwise
         """
-        user_info = bot.get_chat_member(chat_id, user)
+        user_info = bot.get_chat_member(chat_id, user_id)
         if user_info.status == ChatMember.ADMINISTRATOR or user_info.status == ChatMember.CREATOR:
             return True
         else:
@@ -102,6 +104,24 @@ class MarvinBot:
             return '@' + user.username
         else:
             return user.full_name
+
+    def delete_message_if_admin(self, tg_group, message_id):
+        """
+        Get the best user name from Telegram
+        :param tg_group: the group we want to delete the message from
+        :param message_id: the id of the message to delete
+        """
+
+        if tg_group.id not in self.tg_groups:
+            self.tg_groups[tg_group.id] = tg_group
+            is_admin = self.is_sender_admin(self.updater.bot, tg_group.id, self.updater.bot.id)
+            self.tg_groups[tg_group.id].is_admin = is_admin
+            if is_admin:
+                self.updater.bot.delete_message(tg_group.id, message_id)
+        else:
+            if self.tg_groups[tg_group.id].is_admin:
+                self.updater.bot.delete_message(tg_group.id, message_id)
+        return
 
     def is_message_in_correct_group(self, chat: Chat):
         """
@@ -143,7 +163,7 @@ class MarvinBot:
             update.message.reply_text('Ciao, benvenuto in marvin! Visita la pagina '
                                       'github per maggiori informazioni https://github.com/fen0x/marvin')
         else:
-            self.updater.bot.delete_message(update.message.chat.id, update.message.message_id)
+            self.delete_message_if_admin(update.message.chat, update.message.message_id)
 
         return
 
@@ -156,24 +176,21 @@ class MarvinBot:
 
         # Check if the command has been used in the correct group
         if not self.is_message_in_correct_group(update.message.chat):
-            try:
-                self.updater.bot.delete_message(self.authorized_group_id, update.message.message_id)
-            except:
-                pass
+            self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.updater.bot.send_message(update.message.from_user.id,
                                           "Spiacente, questo bot funziona solo nel gruppo autorizzato, non in " +
                                           str(update.message.chat.id))
             return
         # Check if the command is used as reply to another message
         if not update.message.reply_to_message:
-            self.updater.bot.delete_message(self.authorized_group_id, update.message.message_id)
+            self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.updater.bot.send_message(update.message.from_user.id,
                                           "Per usare /comment devi rispondere ad un messaggio")
             return
         # Check that the message has the url
         urls_entities = update.message.reply_to_message.parse_entities([MessageEntity.URL])
         if not urls_entities:
-            self.updater.bot.delete_message(self.authorized_group_id, update.message.message_id)
+            self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.updater.bot.send_message(update.message.from_user.id,
                                           "Per usare questo comando devi rispondere "
                                           "ad un messaggio del bot contenente un link")
@@ -188,14 +205,14 @@ class MarvinBot:
         try:
             cutted_url = praw.models.Submission.id_from_url(url)
         except praw.exceptions.ClientException:
-            self.updater.bot.delete_message(self.authorized_group_id, update.message.message_id)
+            self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.updater.bot.send_message(update.message.from_user.id,
                                           "Il link a cui hai risposto non è un link di reddit valido")
             return
         submission = self.reddit.submission(id=cutted_url)
         if submission.subreddit.display_name == self.subreddit.display_name:
             if submission.locked:
-                self.updater.bot.delete_message(self.authorized_group_id, update.message.message_id)
+                self.delete_message_if_admin(update.message.chat, update.message.message_id)
                 self.updater.bot.send_message(update.message.from_user.id,
                                               "Non puoi commentare un post lockato!")
                 return
@@ -208,7 +225,7 @@ class MarvinBot:
                                               reply_to_message_id=update.message.reply_to_message.message_id)
                 self.logger.info("Comment added to post with id:" + str(cutted_url))
         else:
-            self.updater.bot.delete_message(self.authorized_group_id, update.message.message_id)
+            self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.updater.bot.send_message(update.message.from_user.id,
                                           "Non puoi inviare commenti a post che non appartengono al subreddit: " +
                                           self.subreddit.display_name)
@@ -224,23 +241,20 @@ class MarvinBot:
 
         # Check if the command has been used in the correct group
         if not self.is_message_in_correct_group(update.message.chat):
-            try:
-                self.updater.bot.delete_message(self.authorized_group_id, update.message.message_id)
-            except:
-                pass
+            self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.updater.bot.send_message(update.message.from_user.id,
                                           "Spiacente, questo bot funziona solo nel gruppo autorizzato, non in " +
                                           str(update.message.chat.id))
             return
         # Check if the command is used as reply to another message
         if not update.message.reply_to_message:
-            self.updater.bot.delete_message(self.authorized_group_id, update.message.message_id)
+            self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.updater.bot.send_message(update.message.from_user.id,
                                           "Per usare /postlink devi rispondere ad un messaggio")
             return
         # Check if the command has been used from an administrator
         if not self.is_sender_admin(bot, update.message.chat.id, update.message.from_user.id):
-            self.updater.bot.delete_message(self.authorized_group_id, update.message.message_id)
+            self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.updater.bot.send_message(update.message.from_user.id,
                                           "Spiacente, non sei un amministratore.")
             return
@@ -248,12 +262,12 @@ class MarvinBot:
 
         urls_entities = reply_message.parse_entities([MessageEntity.URL])
         if not urls_entities:
-            self.updater.bot.delete_message(self.authorized_group_id, update.message.message_id)
+            self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.updater.bot.send_message(update.message.from_user.id,
                                           "Il messaggio originale deve contenere una URL")
             return
         if len(urls_entities) > 1:
-            self.updater.bot.delete_message(self.authorized_group_id, update.message.message_id)
+            self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.updater.bot.send_message(update.message.from_user.id,
                                           "Il messaggio originale deve contenere una **sola** URL")
             return
@@ -264,21 +278,20 @@ class MarvinBot:
         if not link_parsed.scheme:
             link_to_post = 'https://' + link_to_post
         elif link_parsed.scheme not in ['http', 'https']:
-            self.updater.bot.delete_message(self.authorized_group_id, update.message.message_id)
+            self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.updater.bot.send_message(update.message.from_user.id,
                                           "Il messaggio originale deve contenere un link HTTP(S)")
             return
         # Fetch page title
         link_page_title = self.get_page_title_from_url(link_to_post)
         if not link_page_title:
-            self.updater.bot.delete_message(self.authorized_group_id, update.message.message_id)
+            self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.updater.bot.send_message(update.message.from_user.id,
                                           "Non sono riuscito a trovare il titolo della pagina")
             return
         # Submit to reddit, add the default comment and send the link to Telegram:
         title = "[" + self.title_prefix + self.get_user_name(reply_message) + "] " + link_page_title
         submission = subreddit.submit(title, url=link_to_post)
-        self.created_posts.append(submission.id)
         self.add_default_comment(submission, update.message.message_id)
         self.updater.bot.send_message(self.authorized_group_id,
                                       "Post creato: " + str(submission.shortlink) +
@@ -296,23 +309,20 @@ class MarvinBot:
 
         # Check if the command has been used in the correct group
         if not self.is_message_in_correct_group(update.message.chat):
-            try:
-                self.updater.bot.delete_message(self.authorized_group_id, update.message.message_id)
-            except:
-                pass
+            self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.updater.bot.send_message(update.message.from_user.id,
                                           "Spiacente, questo bot funziona solo nel gruppo autorizzato, non in " +
                                           str(update.message.chat.id))
             return
         # Check if the command is used as reply to another message
         if not update.message.reply_to_message:
-            self.updater.bot.delete_message(self.authorized_group_id, update.message.message_id)
+            self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.updater.bot.send_message(update.message.from_user.id,
                                           "Per usare /posttext devi rispondere ad un messaggio")
             return
         # Check if the command has been used from an administrator
         if not self.is_sender_admin(bot, update.message.chat.id, update.message.from_user.id):
-            self.updater.bot.delete_message(self.authorized_group_id, update.message.message_id)
+            self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.updater.bot.send_message(update.message.from_user.id,
                                           "Spiacente, non sei un amministratore.")
             return
@@ -322,12 +332,12 @@ class MarvinBot:
         question_title = "[" + self.title_prefix + self.get_user_name(reply_message) + "] "
         admin_post_title = update.message.text_markdown.replace("/posttext", "").strip()
         if len(admin_post_title) < 1:
-            self.updater.bot.delete_message(self.authorized_group_id, update.message.message_id)
+            self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.updater.bot.send_message(update.message.from_user.id,
                                           "Utilizzando il comando, aggiungi un titolo al post:\n/posttext <titolo>")
             return
         elif len(admin_post_title) < 6:
-            self.updater.bot.delete_message(self.authorized_group_id, update.message.message_id)
+            self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.updater.bot.send_message(update.message.from_user.id,
                                           "Serve un titolo più lungo! Riprova")
             return
@@ -338,7 +348,6 @@ class MarvinBot:
 
         # Submit to reddit, add the default comment and send the link to Telegram:
         submission = subreddit.submit(question_title, selftext=question_content)
-        self.created_posts.append(submission.id)
         self.add_default_comment(submission, update.message.message_id)
         self.updater.bot.send_message(self.authorized_group_id,
                                       "Post creato: " + str(submission.shortlink) +
@@ -355,30 +364,27 @@ class MarvinBot:
 
         # Check if the command has been used in the correct group
         if not self.is_message_in_correct_group(update.message.chat):
-            try:
-                self.updater.bot.delete_message(self.authorized_group_id, update.message.message_id)
-            except:
-                pass
+            self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.updater.bot.send_message(update.message.from_user.id,
                                           "Spiacente, questo bot funziona solo nel gruppo autorizzato, non in " +
                                           str(update.message.chat.id))
             return
         # Check if the command is used as reply to another message
         if not update.message.reply_to_message:
-            self.updater.bot.delete_message(self.authorized_group_id, update.message.message_id)
+            self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.updater.bot.send_message(update.message.from_user.id,
                                           "Per usare /delrule devi rispondere ad un messaggio")
             return
         # Check if the command has been used from an administrator
         if not self.is_sender_admin(bot, update.message.chat.id, update.message.from_user.id):
-            self.updater.bot.delete_message(self.authorized_group_id, update.message.message_id)
+            self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.updater.bot.send_message(update.message.from_user.id,
                                           "Spiacente, non sei un amministratore.")
             return
         # Check that the message has the url
         urls_entities = update.message.reply_to_message.parse_entities([MessageEntity.URL])
         if not urls_entities:
-            self.updater.bot.delete_message(self.authorized_group_id, update.message.message_id)
+            self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.updater.bot.send_message(update.message.from_user.id,
                                           "Per usare questo comando devi rispondere "
                                           "ad un messaggio del bot contenente un link")
@@ -388,7 +394,7 @@ class MarvinBot:
         try:
             cutted_url = praw.models.Submission.id_from_url(url)
         except praw.exceptions.ClientException:
-            self.updater.bot.delete_message(self.authorized_group_id, update.message.message_id)
+            self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.updater.bot.send_message(update.message.from_user.id,
                                           "Il link a cui hai risposto non è un link di reddit valido")
             return
@@ -398,7 +404,7 @@ class MarvinBot:
         rule_number = -1
         # Read the rule number
         if len(splitted_message) == 0:
-            self.updater.bot.delete_message(self.authorized_group_id, update.message.message_id)
+            self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.updater.bot.send_message(update.message.from_user.id,
                                           "Non hai fornito il numero di regola per rimuovere il post...")
             return
@@ -406,13 +412,13 @@ class MarvinBot:
             try:
                 rule_number = int(splitted_message[0])
             except ValueError:
-                self.updater.bot.delete_message(self.authorized_group_id, update.message.message_id)
+                self.delete_message_if_admin(update.message.chat, update.message.message_id)
                 self.updater.bot.send_message(update.message.from_user.id,
                                               "Hai fornito un numero di regola non valido... "
                                               "Utilizza il comando con /delrule <numero regola> <note(opzionale)>")
                 return
             if rule_number not in self.rules:
-                self.updater.bot.delete_message(self.authorized_group_id, update.message.message_id)
+                self.delete_message_if_admin(update.message.chat, update.message.message_id)
                 self.updater.bot.send_message(update.message.from_user.id,
                                               "Hai fornito un numero di regola non presente nella lista...")
                 return
@@ -441,7 +447,7 @@ class MarvinBot:
                                           reply_to_message_id=update.message.reply_to_message.message_id)
             self.logger.info("Post with id:" + str(cutted_url) + " has been deleted from Telegram")
         else:
-            self.updater.bot.delete_message(self.authorized_group_id, update.message.message_id)
+            self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.updater.bot.send_message(update.message.from_user.id,
                                           "Non puoi cancellare post che non appartengono al subreddit: " +
                                           self.subreddit.display_name)
@@ -467,9 +473,7 @@ class MarvinBot:
             if self.admin_group_id != 0:
                 bot_ref.send_message(self.admin_group_id, notification_content)
             # Send notification to everyone in the authorized group
-            if submission.id in self.created_posts:
-                self.created_posts.remove(submission.id)
-            else:
+            if submission.author != self.reddit_bot:
                 bot_ref.send_message(self.authorized_group_id, submission.title + "\n" + submission.shortlink)
 
     # ---------------------------------------------
@@ -540,6 +544,7 @@ class MarvinBot:
         self.tg_group = bot_data_file["telegram"]["tg_group"]
         # Read the prefix to the post title
         self.title_prefix = bot_data_file["reddit"]["title_prefix"]
+        self.reddit_bot = bot_data_file["reddit"]["username"]
         # Create the EventHandler and pass it your bot's token.
         self.logger.info("Starting bot... Logging in...")
         self.updater = Updater(bot_data_file["telegram"]["login_token"])
