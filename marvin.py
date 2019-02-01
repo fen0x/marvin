@@ -173,10 +173,9 @@ class MarvinBot:
     # Bot commands
     # ---------------------------------------------
 
-    def start(self, bot, update):
+    def start(self, update):
         """ (Telegram command)
         Send a message when the command /start is issued.
-        @:param bot: an object that represents a Telegram Bot.
         @:param update: an object that represents an incoming update.
         """
         if update.message.chat.id != self.authorized_group_id:
@@ -187,10 +186,9 @@ class MarvinBot:
 
         return
 
-    def comment(self, bot, update):
+    def comment(self, update):
         """ (Telegram command)
         Adds a comment to a reddit post (only if it belong to the authorized subreddit)
-        :param bot: an object that represents a Telegram Bot.
         :param update: an object that represents an incoming update.
         """
 
@@ -253,11 +251,10 @@ class MarvinBot:
                                           self.subreddit.display_name)
             return
 
-    def postlink(self, subreddit, bot, update):
+    def postlink(self, subreddit, update):
         """ (Telegram command)
         Read the link and post it in the subreddit
         :param subreddit: The subreddit where the bot should post the link
-        :param bot: an object that represents a Telegram Bot.
         :param update: an object that represents an incoming update.
         """
 
@@ -277,7 +274,7 @@ class MarvinBot:
                                           "Per usare /postlink devi rispondere ad un messaggio")
             return
         # Check if the command has been used from an administrator
-        if not self.is_sender_admin(bot, update.message.chat.id, update.message.from_user.id):
+        if not self.is_sender_admin(self.updater.bot, update.message.chat.id, update.message.from_user.id):
             self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.updater.bot.send_message(update.message.from_user.id,
                                           "Spiacente, non sei un amministratore.")
@@ -323,11 +320,10 @@ class MarvinBot:
                                       reply_to_message_id=update.message.reply_to_message.message_id)
         self.logger.info("New link-post submitted")
 
-    def posttext(self, subreddit, bot, update):
+    def posttext(self, subreddit, update):
         """ (Telegram command)
         Given a text and a title (from an admin) it create a text post in the subreddit
         :param subreddit: The subreddit where the bot should post the content
-        :param bot: an object that represents a Telegram Bot.
         :param update: an object that represents an incoming update.
         """
 
@@ -347,7 +343,7 @@ class MarvinBot:
                                           "Per usare /posttext devi rispondere ad un messaggio")
             return
         # Check if the command has been used from an administrator
-        if not self.is_sender_admin(bot, update.message.chat.id, update.message.from_user.id):
+        if not self.is_sender_admin(self.updater.bot, update.message.chat.id, update.message.from_user.id):
             self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.updater.bot.send_message(update.message.from_user.id,
                                           "Spiacente, non sei un amministratore.")
@@ -381,10 +377,9 @@ class MarvinBot:
                                       reply_to_message_id=update.message.reply_to_message.message_id)
         self.logger.info("New text-post submitted")
 
-    def delrule(self, bot, update):
+    def delrule(self, update):
         """ (Telegram command)
         Delete a post from the subreddit, posting the reason as comment reading it from the rule dictionary
-        :param bot:  bot: an object that represents a Telegram Bot.
         :param update: update: an object that represents an incoming update.
         """
 
@@ -404,7 +399,7 @@ class MarvinBot:
                                           "Per usare /delrule devi rispondere ad un messaggio")
             return
         # Check if the command has been used from an administrator
-        if not self.is_sender_admin(bot, update.message.chat.id, update.message.from_user.id):
+        if not self.is_sender_admin(self.updater.bot, update.message.chat.id, update.message.from_user.id):
             self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.updater.bot.send_message(update.message.from_user.id,
                                           "Spiacente, non sei un amministratore.")
@@ -515,20 +510,20 @@ class MarvinBot:
         :param update: an object that represents an incoming update.
         :param error: an object that represents Telegram errors.
         """
-        self.logger.warning('Update "%s" caused error "%s"', update, error)
+        self.logger.warning('\nUpdate status:\n"%s"\nCaused error:\n"%s"', update, error)
 
     def message_handler(self, bot, update):
-        if update.message.text.startswith("/"):
+        if update.message.text is not None and update.message.text.startswith("/"):
             if update.message.text.startswith("/start"):
-                self.start(bot, update)
+                self.start(update)
             elif update.message.text.startswith("/comment"):
-                self.comment(bot, update)
+                self.comment(update)
             elif update.message.text.startswith("/postlink"):
-                self.postlink(self.subreddit, bot, update)
+                self.postlink(self.subreddit, update)
             elif update.message.text.startswith("/posttext"):
-                self.posttext(self.subreddit, bot, update)
+                self.posttext(self.subreddit, update)
             elif update.message.text.startswith("/delrule"):
-                self.delrule(bot, update)
+                self.delrule(update)
             else:
                 self.delete_message_if_admin(update.message.chat, update.message.message_id, 5)
         return
@@ -607,7 +602,7 @@ class MarvinBot:
         new_reddit_posts_thread = Thread(target=self.check_new_reddit_posts, args=[])
         new_reddit_posts_thread.start()
 
-        self.logger.info("Starting bot... Bot ready!")
+        self.logger.info("Bot successfully loaded...! Bot ready!")
 
         self.updater.idle()
 
