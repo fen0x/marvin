@@ -105,7 +105,7 @@ class MarvinBot:
 
     def delete_message_with_delay(self, tg_group_id, message_id, seconds_delay):
         """
-        Get the best user name from Telegram
+        Delete message with delay (no admin check, check before using)
         :param tg_group_id: the id of the group we want to delete the message from
         :param message_id: the id of the message to delete
         :param seconds_delay: delay of the delete (in seconds)
@@ -116,7 +116,7 @@ class MarvinBot:
 
     def delete_message_if_admin(self, tg_group, message_id, seconds_delay=0):
         """
-        Get the best user name from Telegram
+        Delete message by checking if we are admin
         :param tg_group: the group we want to delete the message from
         :param message_id: the id of the message to delete
         :param seconds_delay: delay of the delete (in seconds)
