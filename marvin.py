@@ -3,12 +3,12 @@
 import json
 import logging
 import requests
-import praw
 import io
 import datetime
 import pickle
 
 from threading import Thread
+from praw import Reddit, exceptions, models
 from lxml.html import fromstring
 from urllib import parse as urlparse
 from telegram import MessageEntity, ChatMember, Chat
@@ -223,8 +223,8 @@ class MarvinBot:
         comment_text += update.message.text_markdown.replace("/comment", "").strip()
         url = urls_entities.popitem()[1]
         try:
-            cutted_url = praw.models.Submission.id_from_url(url)
-        except praw.exceptions.ClientException:
+            cutted_url = models.Submission.id_from_url(url)
+        except exceptions.ClientException:
             self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.updater.bot.send_message(update.message.from_user.id,
                                           "Il link a cui hai risposto non è un link di reddit valido")
@@ -415,8 +415,8 @@ class MarvinBot:
         # Get the rule content, post the comment and delete the post
         url = urls_entities.popitem()[1]
         try:
-            cutted_url = praw.models.Submission.id_from_url(url)
-        except praw.exceptions.ClientException:
+            cutted_url = models.Submission.id_from_url(url)
+        except exceptions.ClientException:
             self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.updater.bot.send_message(update.message.from_user.id,
                                           "Il link a cui hai risposto non è un link di reddit valido")
@@ -571,7 +571,7 @@ class MarvinBot:
         self.session.headers[
             "User-Agent"] = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/537.36"
         # reddit login
-        self.reddit = praw.Reddit(**bot_data_file["reddit"])
+        self.reddit = Reddit(**bot_data_file["reddit"])
         # Read subreddit
         subreddit_name = bot_data_file["reddit"]["subreddit_name"]
         self.subreddit = self.reddit.subreddit(subreddit_name)
