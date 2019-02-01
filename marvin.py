@@ -34,6 +34,8 @@ class MarvinBot:
         self.default_comment_content = None
         # The title prefix to use when submitting a post (From JSON)
         self.title_prefix = None
+        # Telegram public group's username
+        self.tg_group = None
         # Reference to the reddit instance
         self.reddit = None
         # Dictionary used to contain all the rules used when deleting a post
@@ -109,14 +111,24 @@ class MarvinBot:
         """
         return chat.id == self.authorized_group_id
 
-    def add_default_comment(self, post_submission):
+    def add_default_comment(self, post_submission, tg_msg_id):
         """
         Function that add the default comment to the given post submission
         :param post_submission: The submitted post where the bot should add the comment
+        :param tg_msg_id: The msg id of the message the original post come from
         """
-        comment = post_submission.reply(self.default_comment_content)
+        string_to_send = self.default_comment_content
+        if tg_msg_id is None:
+            string_to_send = string_to_send.replace("{TG_MSG_ID}", "")
+        else:
+            string_to_send = string_to_send.replace("{TG_MSG_ID}", "/" + str(tg_msg_id))
+        string_to_send = string_to_send.replace("{SUBREDDIT}", str(self.subreddit))
+        string_to_send = string_to_send.replace("{TG_GROUP}", str(self.tg_group))
+
+        comment = post_submission.reply(string_to_send)
         comment.mod.distinguish(sticky=True)
         self.logger.info("Default comment sent!")
+
 
     # ---------------------------------------------
     # Bot commands
@@ -151,7 +163,7 @@ class MarvinBot:
                 "Per usare questo comando devi rispondere ad un messaggio del bot contenente un link")
             return
         # Get the comment content, post id and post the comment
-        comment_text = "\\[[Telegram](https://t.me/ItalyInformatica/" + str(update.message.message_id) + "/)"
+        comment_text = "\\[[Telegram](https://t.me/" + str(self.tg_group) + "/" + str(update.message.message_id) + "/)"
         username = self.get_user_name(update.message)
         comment_text += " - "
         comment_text += "[" + username + "](https://t.me/" + username[1:] + ")" + "\\]  \n"
@@ -171,9 +183,10 @@ class MarvinBot:
             else:
                 created_comment = submission.reply(comment_text)
                 comment_link = "https://www.reddit.com" + created_comment.permalink
-                update.message.reply_text(
-                    "Commento aggiunto al post! (da:" + self.get_user_name(
-                        update.message) + ")\n" + comment_link)
+                self.updater.bot.send_message(self.authorized_group_id,
+                                              "Commento aggiunto al post! (da: " + self.get_user_name(update.message)
+                                              + ")\n" + comment_link,
+                                              reply_to_message_id=update.message.reply_to_message.message_id)
                 self.logger.info("Comment added to post with id:" + str(cutted_url))
         else:
             update.message.reply_text(
@@ -226,9 +239,11 @@ class MarvinBot:
         title = "[" + self.title_prefix + self.get_user_name(reply_message) + "] " + link_page_title
         submission = subreddit.submit(title, url=link_to_post)
         self.created_posts.append(submission.id)
-        self.add_default_comment(submission)
-        update.message.reply_text(
-            "Post creato: " + str(submission.shortlink) + " (da:" + self.get_user_name(update.message) + ")")
+        self.add_default_comment(submission, update.message.message_id)
+        self.updater.bot.send_message(self.authorized_group_id,
+                                      "Post creato: " + str(submission.shortlink) +
+                                      " (da: " + self.get_user_name(update.message) + ")",
+                                      reply_to_message_id=update.message.reply_to_message.message_id)
         self.logger.info("New link-post submitted")
 
     def posttext(self, subreddit, bot, update):
@@ -254,8 +269,11 @@ class MarvinBot:
 
         question_title = "[" + self.title_prefix + self.get_user_name(reply_message) + "] "
         admin_post_title = update.message.text_markdown.replace("/posttext", "").strip()
-        if len(admin_post_title) < 5:
+        if len(admin_post_title) < 1:
             update.message.reply_text("Utilizzando il comando, aggiungi un titolo al post:\n/posttext <titolo>")
+            return
+        elif len(admin_post_title) < 6:
+            update.message.reply_text("Serve un titolo più lungo! Riprova")
             return
         else:
             question_title += admin_post_title
@@ -265,9 +283,11 @@ class MarvinBot:
         # Submit to reddit, add the default comment and send the link to Telegram:
         submission = subreddit.submit(question_title, selftext=question_content)
         self.created_posts.append(submission.id)
-        self.add_default_comment(submission)
-        update.message.reply_text(
-            "Post creato: " + str(submission.shortlink) + " (da:" + self.get_user_name(update.message) + ")")
+        self.add_default_comment(submission, update.message.message_id)
+        self.updater.bot.send_message(self.authorized_group_id,
+                                      "Post creato: " + str(submission.shortlink) +
+                                      " (da: " + self.get_user_name(update.message) + ")",
+                                      reply_to_message_id=update.message.reply_to_message.message_id)
         self.logger.info("New text-post submitted")
 
     def delrule(self, bot, update):
@@ -334,15 +354,17 @@ class MarvinBot:
             if note_message is not None:
                 delete_coment += note_message + "\n\n"
             delete_coment += "Se hai dubbi o domande, ti preghiamo di inviare un messaggio in "
-            delete_coment += "[modmail](https://www.reddit.com/message/compose?to=%2Fr%2FItalyInformatica).\n\n"
+            delete_coment += "[modmail](https://www.reddit.com/message/compose?to=%2Fr%2F" + self.subreddit + ").\n\n"
 
             # Send the comment, remove and lock the post
             submission.reply(delete_coment)
             mod_object = submission.mod
             mod_object.remove()
             mod_object.lock()
-            update.message.reply_text(
-                "Il post è stato cancellato! (da:" + self.get_user_name(update.message) + ")")
+            self.updater.bot.send_message(self.authorized_group_id,
+                                          "Il post è stato cancellato! (da: "
+                                          + self.get_user_name(update.message) + ")",
+                                          reply_to_message_id=update.message.reply_to_message.message_id)
             self.logger.info("Post with id:" + str(cutted_url) + " has been deleted from Telegram")
         else:
             update.message.reply_text(
@@ -365,7 +387,8 @@ class MarvinBot:
                                    "Postato da:" + submission.author.name + "\n" + \
                                    submission.shortlink
             # Send admin notification
-            bot_ref.send_message(self.admin_group_id, notification_content)
+            if self.admin_group_id != 0:
+                bot_ref.send_message(self.admin_group_id, notification_content)
             # Send notification to everyone in the authorized group
             if submission.id in self.created_posts:
                 self.created_posts.remove(submission.id)
@@ -437,6 +460,7 @@ class MarvinBot:
         # Read authorized group name
         self.authorized_group_id = int(bot_data_file["telegram"]["authorized_group_id"])
         self.admin_group_id = int(bot_data_file["telegram"]["admin_group_id"])
+        self.tg_group = bot_data_file["telegram"]["tg_group"]
         # Read the prefix to the post title
         self.title_prefix = bot_data_file["reddit"]["title_prefix"]
         # Create the EventHandler and pass it your bot's token.
