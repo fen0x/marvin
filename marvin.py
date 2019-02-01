@@ -13,7 +13,7 @@ from lxml.html import fromstring
 from urllib import parse as urlparse
 from functools import partial
 from telegram import MessageEntity, ChatMember, User, Chat
-from telegram.ext import CommandHandler, Filters, Updater
+from telegram.ext import MessageHandler, Updater
 
 
 class MarvinBot:
@@ -489,6 +489,22 @@ class MarvinBot:
         """
         self.logger.warning('Update "%s" caused error "%s"', update, error)
 
+    def message_handler(self, bot, update):
+        if update.message.text.startswith("/"):
+            if update.message.text.startswith("/start"):
+                self.start(bot, update)
+            elif update.message.text.startswith("/comment"):
+                self.comment(bot, update)
+            elif update.message.text.startswith("/postlink"):
+                self.postlink(self.subreddit, bot, update)
+            elif update.message.text.startswith("/posttext"):
+                self.posttext(self.subreddit, bot, update)
+            elif update.message.text.startswith("/delrule"):
+                self.delrule(bot, update)
+            else:
+                self.delete_message_if_admin(update.message.chat, update.message.message_id)
+        return
+
     def main(self):
         """Start the bot."""
         self.logger.info("Starting bot... Reading login Token...")
@@ -553,15 +569,7 @@ class MarvinBot:
         dp = self.updater.dispatcher
 
         # Register commands
-        dp.add_handler(CommandHandler("start", self.start))
-
-        dp.add_handler(CommandHandler("postlink", partial(self.postlink, self.subreddit)))
-
-        dp.add_handler(CommandHandler("posttext", partial(self.posttext, self.subreddit)))
-
-        dp.add_handler(CommandHandler("delrule", self.delrule))
-
-        dp.add_handler(CommandHandler("comment", self.comment))
+        dp.add_handler(MessageHandler(filters=None, callback=self.message_handler))
 
         # log all errors
         dp.add_error_handler(self.error_handler)
