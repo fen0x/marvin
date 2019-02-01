@@ -198,7 +198,9 @@ class MarvinBot:
         if not self.is_message_in_correct_group(update.message.chat):
             self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.updater.bot.send_message(update.message.from_user.id,
-                                          "Spiacente, questo bot funziona solo nel gruppo autorizzato, non in " +
+                                          "Spiacente, questo bot funziona solo nel gruppo autorizzato con id " +
+                                          str(self.authorized_group_id) +
+                                          ", non in " +
                                           str(update.message.chat.id))
             return
         # Check if the command is used as reply to another message
@@ -263,7 +265,9 @@ class MarvinBot:
         if not self.is_message_in_correct_group(update.message.chat):
             self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.updater.bot.send_message(update.message.from_user.id,
-                                          "Spiacente, questo bot funziona solo nel gruppo autorizzato, non in " +
+                                          "Spiacente, questo bot funziona solo nel gruppo autorizzato con id " +
+                                          str(self.authorized_group_id) +
+                                          ", non in " +
                                           str(update.message.chat.id))
             return
         # Check if the command is used as reply to another message
@@ -331,7 +335,9 @@ class MarvinBot:
         if not self.is_message_in_correct_group(update.message.chat):
             self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.updater.bot.send_message(update.message.from_user.id,
-                                          "Spiacente, questo bot funziona solo nel gruppo autorizzato, non in " +
+                                          "Spiacente, questo bot funziona solo nel gruppo autorizzato con id " +
+                                          str(self.authorized_group_id) +
+                                          ", non in " +
                                           str(update.message.chat.id))
             return
         # Check if the command is used as reply to another message
@@ -386,7 +392,9 @@ class MarvinBot:
         if not self.is_message_in_correct_group(update.message.chat):
             self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.updater.bot.send_message(update.message.from_user.id,
-                                          "Spiacente, questo bot funziona solo nel gruppo autorizzato, non in " +
+                                          "Spiacente, questo bot funziona solo nel gruppo autorizzato con id " +
+                                          str(self.authorized_group_id) +
+                                          ", non in " +
                                           str(update.message.chat.id))
             return
         # Check if the command is used as reply to another message
