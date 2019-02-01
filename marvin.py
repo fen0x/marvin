@@ -14,6 +14,11 @@ from urllib import parse as urlparse
 from telegram import MessageEntity, ChatMember, Chat
 from telegram.ext import MessageHandler, Updater
 from time import sleep
+import urllib.request
+import urllib
+import html
+from urllib.parse import unquote
+
 
 
 class MarvinBot:
@@ -59,6 +64,10 @@ class MarvinBot:
         :param page_url: The page to get the title from
         :return: A string that contain the title of the given page
         """
+
+        if page_url.startswith("https://www.youtube.com/watch?v="):
+            return self.get_youtube_title_from_url(page_url)
+
         r = self.session.get(page_url)
 
         # Update cookie cache:
@@ -168,6 +177,27 @@ class MarvinBot:
         comment = post_submission.reply(string_to_send)
         comment.mod.distinguish(sticky=True)
         self.logger.info("Default comment sent!")
+
+    @staticmethod
+    def get_youtube_title_from_url(url):
+        """
+        Function that gets title from youtube video
+        :param url: url of youtube video
+        :returns video title
+        """
+        a_point = url.find("=") + 1
+        url_id = url[a_point:]
+        url_get = "https://youtube.com/get_video_info?video_id=" + url_id
+        contents = urllib.request.urlopen(url_get).read()
+        contents = str(contents)
+        a_point = contents.find("&title=") + 7
+        contents = contents[a_point:]
+        b_point = contents.find("&")
+        contents = contents[:b_point]
+        contents_decoded = unquote(contents)
+        contents_decoded = contents_decoded.replace("+"," ")
+        return "[YouTube] " + contents_decoded
+
 
     # ---------------------------------------------
     # Bot commands
