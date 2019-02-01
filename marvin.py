@@ -38,8 +38,6 @@ class MarvinBot:
         self.tg_group = None
         # Reference to the reddit instance
         self.reddit = None
-        # Reddit username
-        self.reddit_bot = None
         # Dictionary used to contain all the rules used when deleting a post
         self.rules = {}
         # Logger Reference
@@ -495,7 +493,7 @@ class MarvinBot:
             if self.admin_group_id != 0:
                 bot_ref.send_message(self.admin_group_id, notification_content)
             # Send notification to everyone in the authorized group
-            if submission.author != self.reddit_bot:
+            if submission.author != self.reddit.user.me().name:
                 bot_ref.send_message(self.authorized_group_id, submission.title + "\n" + submission.shortlink)
 
     # ---------------------------------------------
@@ -582,7 +580,6 @@ class MarvinBot:
         self.tg_group = bot_data_file["telegram"]["tg_group"]
         # Read the prefix to the post title
         self.title_prefix = bot_data_file["reddit"]["title_prefix"]
-        self.reddit_bot = bot_data_file["reddit"]["username"]
         # Create the EventHandler and pass it your bot's token.
         self.logger.info("Starting bot... Logging in...")
         self.updater = Updater(bot_data_file["telegram"]["login_token"])
