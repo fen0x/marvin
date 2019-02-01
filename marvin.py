@@ -186,16 +186,19 @@ class MarvinBot:
         :returns video title
         """
         a_point = url.find("=") + 1
-        url_id = url[a_point:]
-        url_get = "https://youtube.com/get_video_info?video_id=" + url_id
+        video_id = url[a_point:]
+        url_get = "https://youtube.com/get_video_info?video_id=" + video_id
+
+        # http get request to obtain video info
         contents = urllib.request.urlopen(url_get).read()
+
         contents = str(contents)
         a_point = contents.find("&title=") + 7
         contents = contents[a_point:]
         b_point = contents.find("&")
         contents = contents[:b_point]
         contents_decoded = unquote(contents)
-        contents_decoded = contents_decoded.replace("+"," ")
+        contents_decoded = contents_decoded.replace("+", " ")
         return "[YouTube] " + contents_decoded
 
 
