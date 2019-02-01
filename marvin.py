@@ -11,9 +11,9 @@ import pickle
 from threading import Thread
 from lxml.html import fromstring
 from urllib import parse as urlparse
-from functools import partial
-from telegram import MessageEntity, ChatMember, User, Chat
+from telegram import MessageEntity, ChatMember, Chat
 from telegram.ext import MessageHandler, Updater
+from time import sleep
 
 
 class MarvinBot:
@@ -105,11 +105,23 @@ class MarvinBot:
         else:
             return user.full_name
 
-    def delete_message_if_admin(self, tg_group, message_id):
+    def delete_message_with_delay(self, tg_group_id, message_id, seconds_delay):
+        """
+        Get the best user name from Telegram
+        :param tg_group_id: the id of the group we want to delete the message from
+        :param message_id: the id of the message to delete
+        :param seconds_delay: delay of the delete (in seconds)
+        """
+        sleep(seconds_delay)
+        self.updater.bot.delete_message(tg_group_id, message_id)
+        return
+
+    def delete_message_if_admin(self, tg_group, message_id, seconds_delay=0):
         """
         Get the best user name from Telegram
         :param tg_group: the group we want to delete the message from
         :param message_id: the id of the message to delete
+        :param seconds_delay: delay of the delete (in seconds)
         """
 
         if tg_group.id not in self.tg_groups:
@@ -117,10 +129,20 @@ class MarvinBot:
             is_admin = self.is_sender_admin(self.updater.bot, tg_group.id, self.updater.bot.id)
             self.tg_groups[tg_group.id].is_admin = is_admin
             if is_admin:
-                self.updater.bot.delete_message(tg_group.id, message_id)
+                if seconds_delay > 0:
+                    delete_thread = Thread(target=self.delete_message_with_delay,
+                                           args=[tg_group.id, message_id, seconds_delay])
+                    delete_thread.start()
+                else:
+                    self.updater.bot.delete_message(tg_group.id, message_id)
         else:
             if self.tg_groups[tg_group.id].is_admin:
-                self.updater.bot.delete_message(tg_group.id, message_id)
+                if seconds_delay > 0:
+                    delete_thread = Thread(target=self.delete_message_with_delay,
+                                           args=[tg_group.id, message_id, seconds_delay])
+                    delete_thread.start()
+                else:
+                    self.updater.bot.delete_message(tg_group.id, message_id)
         return
 
     def is_message_in_correct_group(self, chat: Chat):
@@ -502,7 +524,7 @@ class MarvinBot:
             elif update.message.text.startswith("/delrule"):
                 self.delrule(bot, update)
             else:
-                self.delete_message_if_admin(update.message.chat, update.message.message_id)
+                self.delete_message_if_admin(update.message.chat, update.message.message_id, 5)
         return
 
     def main(self):
