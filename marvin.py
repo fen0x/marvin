@@ -11,12 +11,11 @@ from threading import Thread
 from praw import Reddit, exceptions, models
 from lxml.html import fromstring
 from urllib import parse as urlparse
+from urllib.parse import unquote
 from telegram import MessageEntity, ChatMember, Chat
 from telegram.ext import MessageHandler, Updater
+from telegram import TelegramError
 from time import sleep
-import urllib.request
-import urllib
-from urllib.parse import unquote
 
 
 class MarvinBot:
@@ -64,7 +63,11 @@ class MarvinBot:
         """
 
         if page_url.startswith("https://www.youtube.com/watch?v="):
-            return self.get_youtube_title_from_url(page_url)
+            video_id = page_url[32:]
+            return self.get_youtube_title_from_url(video_id)
+        elif page_url.startswith("https://youtu.be/"):
+            video_id = page_url[17:]
+            return self.get_youtube_title_from_url(video_id)
 
         r = self.session.get(page_url)
 
@@ -176,21 +179,20 @@ class MarvinBot:
         comment.mod.distinguish(sticky=True)
         self.logger.info("Default comment sent!")
 
-    @staticmethod
-    def get_youtube_title_from_url(url):
+    def get_youtube_title_from_url(self, video_id):
         """
         Function that gets title from youtube video
-        :param url: url of youtube video
+        :param video_id: id of youtube video
         :returns video title
         """
-        a_point = url.find("=") + 1
-        video_id = url[a_point:]
+
         url_get = "https://youtube.com/get_video_info?video_id=" + video_id
 
         # http get request to obtain video info
-        contents = urllib.request.urlopen(url_get).read()
+        contents = self.session.get(url_get)
+        # contents = urllib.request.urlopen(url_get).read()
 
-        contents = str(contents)
+        contents = str(contents.text)
         a_point = contents.find("&title=") + 7
         contents = contents[a_point:]
         b_point = contents.find("&")
@@ -201,20 +203,22 @@ class MarvinBot:
 
     def send_tg_message_reply_or_private(self, update, text):
         """ (Telegram command)
-        Send a reply in private, when not possible in group
+        Send a reply in private; when not possible, send in group
         @:param message: an object that represents an incoming message.
         @:param text: text to send
         """
         try:
             self.updater.bot.send_message(update.message.from_user.id, text)
-        except:
-            username = str(update.message.from_user.username)
-            if len(username) < 1:
-                text = "[" + str(update.message.from_user.first_name) + " imposta un username!]" + "\n" + text
+        except TelegramError:
+            if update.message.from_user.username is None:
+                text_to_send = "[" + str(update.message.from_user.first_name)
+                if update.message.from_user.last_name is not None:
+                    text_to_send += " " + str(update.message.from_user.last_name)
+                text_to_send += ", imposta un username!]" + "\n" + text
             else:
-                text = "@" + str(update.message.from_user.username) + "\n" + text
+                text_to_send = "@" + str(update.message.from_user.username) + "\n" + text
             self.updater.bot.send_message(chat_id=update.message.chat.id,
-                                          text=text)
+                                          text=text_to_send)
         return
 
     # ---------------------------------------------
