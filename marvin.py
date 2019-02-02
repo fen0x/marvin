@@ -307,7 +307,7 @@ class MarvinBot:
                                                   "Commento aggiunto al post! (da: " + self.get_user_name(update.message)
                                                   + ")\n" + comment_link,
                                                   reply_to_message_id=update.message.reply_to_message.message_id)
-                    self.logger.info("Comment added to post with id:" + str(cutted_url))
+                    self.logger.info("Comment added to post with id: " + str(cutted_url))
                     return
                 else:
                     self.delete_message_if_admin(update.message.chat, update.message.message_id)
@@ -546,7 +546,7 @@ class MarvinBot:
                                           "Il post è stato cancellato! (da: "
                                           + self.get_user_name(update.message) + ")",
                                           reply_to_message_id=update.message.reply_to_message.message_id)
-            self.logger.info("Post with id:" + str(cutted_url) + " has been deleted from Telegram")
+            self.logger.info("Post with id: " + str(cutted_url) + " has been deleted from Telegram")
         else:
             self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.send_tg_message_reply_or_private(update,
