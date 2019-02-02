@@ -94,10 +94,7 @@ class MarvinBot:
         :return: True if the user is an admin in the given chat, False otherwise
         """
         user_info = bot.get_chat_member(chat_id, user_id)
-        if user_info.status == ChatMember.ADMINISTRATOR or user_info.status == ChatMember.CREATOR:
-            return True
-        else:
-            return False
+        return user_info.status == ChatMember.ADMINISTRATOR or user_info.status == ChatMember.CREATOR
 
     @staticmethod
     def get_user_name(message):
@@ -249,9 +246,9 @@ class MarvinBot:
             self.send_tg_message_reply_or_private(update,
                                                   "Spiacente, questo bot funziona solo nel"
                                                   "gruppo autorizzato con id " +
-                                                  str(self.authorized_group_id) +
+                                                  str(self.authorized_group_id) + " (" + str(self.tg_group) + ")" +
                                                   ", non in " +
-                                                  str(update.message.chat.id))
+                                                  str(update.message.chat.id) + " (attuale)")
             return
         # Check if the command is used as reply to another message
         if not update.message.reply_to_message:
@@ -317,9 +314,9 @@ class MarvinBot:
             self.send_tg_message_reply_or_private(update,
                                                   "Spiacente, questo bot funziona solo nel"
                                                   "gruppo autorizzato con id " +
-                                                  str(self.authorized_group_id) +
+                                                  str(self.authorized_group_id) + " (" + str(self.tg_group) + ")" +
                                                   ", non in " +
-                                                  str(update.message.chat.id))
+                                                  str(update.message.chat.id) + " (attuale)")
             return
         # Check if the command is used as reply to another message
         if not update.message.reply_to_message:
@@ -387,9 +384,9 @@ class MarvinBot:
             self.send_tg_message_reply_or_private(update,
                                                   "Spiacente, questo bot funziona solo nel"
                                                   "gruppo autorizzato con id " +
-                                                  str(self.authorized_group_id) +
+                                                  str(self.authorized_group_id) + " (" + str(self.tg_group) + ")" +
                                                   ", non in " +
-                                                  str(update.message.chat.id))
+                                                  str(update.message.chat.id) + " (attuale)")
             return
         # Check if the command is used as reply to another message
         if not update.message.reply_to_message:
@@ -445,9 +442,9 @@ class MarvinBot:
             self.send_tg_message_reply_or_private(update,
                                                   "Spiacente, questo bot funziona solo nel"
                                                   "gruppo autorizzato con id " +
-                                                  str(self.authorized_group_id) +
+                                                  str(self.authorized_group_id) + " (" + str(self.tg_group) + ")" +
                                                   ", non in " +
-                                                  str(update.message.chat.id))
+                                                  str(update.message.chat.id) + " (attuale)")
             return
         # Check if the command is used as reply to another message
         if not update.message.reply_to_message:
