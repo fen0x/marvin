@@ -636,7 +636,7 @@ class MarvinBot:
         subreddit_name = bot_data_file["reddit"]["subreddit_name"]
         self.subreddit = self.reddit.subreddit(subreddit_name)
         self.logger.info(
-            "Connecting to subreddit:" + str(self.subreddit.display_name) + " - " + str(self.subreddit.title))
+            "Connecting to subreddit: " + str(self.subreddit.display_name) + " - " + str(self.subreddit.title))
         # Read authorized group name
         self.authorized_group_id = int(bot_data_file["telegram"]["authorized_group_id"])
         self.admin_group_id = int(bot_data_file["telegram"]["admin_group_id"])
