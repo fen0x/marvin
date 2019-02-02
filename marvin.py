@@ -195,8 +195,8 @@ class MarvinBot:
         contents = contents[a_point:]
         b_point = contents.find("&")
         contents = contents[:b_point]
+        contents = contents.replace("+", " ")
         contents_decoded = unquote(contents)
-        contents_decoded = contents_decoded.replace("+", " ")
         return "[YouTube] " + contents_decoded
 
     def send_tg_message_reply_or_private(self, update, text):
