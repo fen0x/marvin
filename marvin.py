@@ -308,12 +308,14 @@ class MarvinBot:
                                                   + ")\n" + comment_link,
                                                   reply_to_message_id=update.message.reply_to_message.message_id)
                     self.logger.info("Comment added to post with id:" + str(cutted_url))
+                    return
                 else:
                     self.delete_message_if_admin(update.message.chat, update.message.message_id)
                     self.send_tg_message_reply_or_private(update,
                                                           "Il tuo commento contiene la seguente parola bandita: " +
                                                           str(good_check)
                                                           )
+                    return
         else:
             self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.send_tg_message_reply_or_private(update,
