@@ -539,6 +539,7 @@ class MarvinBot:
         except FileNotFoundError:
             self.logger.error("FATAL ERROR-->" + self.config_file_name + " FILE NOT FOUND, ABORTING...")
             quit(1)
+        self.logger.info("Starting bot... Reading informations from files...")
         # Read the default comment data
         try:
             file = io.open(self.comment_file_name, mode="r", encoding="utf-8")
@@ -571,12 +572,13 @@ class MarvinBot:
         self.session.headers[
             "User-Agent"] = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/537.36"
         # reddit login
+        self.logger.info("Starting bot... Connecting to subreddit...")
         self.reddit = Reddit(**bot_data_file["reddit"])
         # Read subreddit
         subreddit_name = bot_data_file["reddit"]["subreddit_name"]
         self.subreddit = self.reddit.subreddit(subreddit_name)
         self.logger.info(
-            "Connecting to subreddit:" + str(self.subreddit.display_name) + " - " + str(self.subreddit.title))
+            "Connected to subreddit:" + str(self.subreddit.display_name) + " - " + str(self.subreddit.title))
         # Read authorized group name
         self.authorized_group_id = int(bot_data_file["telegram"]["authorized_group_id"])
         self.admin_group_id = int(bot_data_file["telegram"]["admin_group_id"])
@@ -584,7 +586,7 @@ class MarvinBot:
         # Read the prefix to the post title
         self.title_prefix = bot_data_file["reddit"]["title_prefix"]
         # Create the EventHandler and pass it your bot's token.
-        self.logger.info("Starting bot... Logging in...")
+        self.logger.info("Starting bot... Logging in on Telegram...")
         self.updater = Updater(bot_data_file["telegram"]["login_token"])
         self.logger.info("Starting bot... Setting handler...")
         # Get the dispatcher to register handlers
@@ -595,6 +597,8 @@ class MarvinBot:
 
         # log all errors
         dp.add_error_handler(self.error_handler)
+
+        self.logger.info("Starting bot... Starting polling and threads...")
 
         # Start the Bot and the important threads
         self.updater.start_polling()
