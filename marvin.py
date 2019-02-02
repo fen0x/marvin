@@ -23,6 +23,7 @@ class MarvinBot:
     comment_file_name = "content/defaultComment.txt"
     rules_file_name = "content/delete_post_rules.json"
     cookie_cache_file_name = "content/cookies.pkl"
+    word_blacklist_file_name = "content/words_blacklist.json"
 
     def __init__(self, logger_ref):
         # The subreddit where the bot must post
@@ -39,6 +40,8 @@ class MarvinBot:
         self.tg_group = None
         # Reference to the reddit instance
         self.reddit = None
+        # Array used to contain all the blacklisted words
+        self.word_blacklist = []
         # Dictionary used to contain all the rules used when deleting a post
         self.rules = {}
         # Logger Reference
@@ -108,6 +111,16 @@ class MarvinBot:
             return '@' + user.username
         else:
             return user.full_name
+
+    def check_blacklist(self, text):
+        words = text.split()
+        for word_t in words:
+            word_t = word_t.lower()
+            for word_b in self.word_blacklist:
+                if word_t == word_b:
+                    return word_t
+
+        return True
 
     def delete_message_with_delay(self, tg_group_id, message_id, seconds_delay):
         """
@@ -286,13 +299,21 @@ class MarvinBot:
                                                       "Non puoi commentare un post lockato!")
                 return
             else:
-                created_comment = submission.reply(comment_text)
-                comment_link = "https://www.reddit.com" + created_comment.permalink
-                self.updater.bot.send_message(self.authorized_group_id,
-                                              "Commento aggiunto al post! (da: " + self.get_user_name(update.message)
-                                              + ")\n" + comment_link,
-                                              reply_to_message_id=update.message.reply_to_message.message_id)
-                self.logger.info("Comment added to post with id:" + str(cutted_url))
+                good_check = self.check_blacklist(comment_text)
+                if good_check == True:
+                    created_comment = submission.reply(comment_text)
+                    comment_link = "https://www.reddit.com" + created_comment.permalink
+                    self.updater.bot.send_message(self.authorized_group_id,
+                                                  "Commento aggiunto al post! (da: " + self.get_user_name(update.message)
+                                                  + ")\n" + comment_link,
+                                                  reply_to_message_id=update.message.reply_to_message.message_id)
+                    self.logger.info("Comment added to post with id:" + str(cutted_url))
+                else:
+                    self.delete_message_if_admin(update.message.chat, update.message.message_id)
+                    self.send_tg_message_reply_or_private(update,
+                                                          "Il tuo commento contiene la seguente parola bandita: " +
+                                                          str(good_check)
+                                                          )
         else:
             self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.send_tg_message_reply_or_private(update,
@@ -586,6 +607,7 @@ class MarvinBot:
     def main(self):
         """Start the bot."""
         self.logger.info("Starting bot... Reading login Token...")
+
         # Read the token from the json
         bot_data_file = None
         try:
@@ -595,6 +617,7 @@ class MarvinBot:
             self.logger.error("FATAL ERROR-->" + self.config_file_name + " FILE NOT FOUND, ABORTING...")
             quit(1)
         self.logger.info("Starting bot... Reading informations from files...")
+
         # Read the default comment data
         try:
             file = io.open(self.comment_file_name, mode="r", encoding="utf-8")
@@ -603,6 +626,7 @@ class MarvinBot:
         except FileNotFoundError:
             self.logger.error("FATAL ERROR-->" + self.comment_file_name + " FILE NOT FOUND, ABORTING...")
             quit(1)
+
         # Read the rules used to delete a post
         try:
             with open(self.rules_file_name) as data_file:
@@ -610,8 +634,19 @@ class MarvinBot:
                 for current_rule in rules_list["rules"]:
                     self.rules[current_rule["number"]] = current_rule["text"]
         except FileNotFoundError:
-            self.logger.error("FATAL ERROR-->" + self.config_file_name + " FILE NOT FOUND, ABORTING...")
+            self.logger.error("FATAL ERROR-->" + self.rules_file_name + " FILE NOT FOUND, ABORTING...")
             quit(1)
+
+        # Read the blacklisted words
+        try:
+            with open(self.word_blacklist_file_name) as data_file:
+                word_blacklist2 = json.load(data_file)
+                for current_word in word_blacklist2["words"]:
+                    self.word_blacklist.append(current_word)
+        except FileNotFoundError:
+            self.logger.error("FATAL ERROR-->" + self.word_blacklist_file_name + " FILE NOT FOUND, ABORTING...")
+            quit(1)
+        self.word_blacklist.sort()
 
         # Setup requests session:
         self.session = requests.Session()
