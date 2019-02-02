@@ -12,9 +12,8 @@ from praw import Reddit, exceptions, models
 from lxml.html import fromstring
 from urllib import parse as urlparse
 from urllib.parse import unquote
-from telegram import MessageEntity, ChatMember, Chat
+from telegram import MessageEntity, ChatMember, Chat, TelegramError
 from telegram.ext import MessageHandler, Updater
-from telegram import TelegramError
 from time import sleep
 
 
@@ -202,9 +201,9 @@ class MarvinBot:
         return "[YouTube] " + contents_decoded
 
     def send_tg_message_reply_or_private(self, update, text):
-        """ (Telegram command)
+        """
         Send a reply in private; when not possible, send in group
-        @:param message: an object that represents an incoming message.
+        @:param update: an object that represents an incoming message.
         @:param text: text to send
         """
         try:
