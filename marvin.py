@@ -117,13 +117,19 @@ class MarvinBot:
 
     def check_blacklist(self, text):
         words = text.split()
-        for word_t in words:
-            word_t = word_t.lower()
-            for word_b in self.word_blacklist:
-                if word_t == word_b:
-                    return word_t
+        words.sort();
 
-        return True
+        index_t = 0
+        index_b = 0
+        while index_t < len(words) and index_b < len(self.word_blacklist):
+            if words[index_t] == self.word_blacklist[index_b]:
+                return words[index_t]
+            elif words[index_t] > self.word_blacklist[index_b]:
+                index_b = index_b + 1
+            else:
+                index_t = index_t + 1
+
+        return None
 
     def delete_message_with_delay(self, tg_group_id, message_id, seconds_delay):
         """
@@ -303,7 +309,7 @@ class MarvinBot:
                 return
             else:
                 good_check = self.check_blacklist(comment_text)
-                if good_check == True:
+                if good_check is None:
                     created_comment = submission.reply(comment_text)
                     comment_link = "https://www.reddit.com" + created_comment.permalink
                     self.updater.bot.send_message(self.authorized_group_id,
@@ -565,12 +571,11 @@ class MarvinBot:
         :param submission: the reddit post
         """
         for autopin_rule in self.auto_pinned_posts:
-            if str(submission.title.lower()).find(autopin_rule["text"]) != -1:
-                for authors_pin in autopin_rule["user"]:
+            if submission.title.lower().find(autopin_rule["text"]) != -1:
+                for authors_pin in autopin_rule["users"]:
                     if (authors_pin == submission.author.name.lower()):
                         self.updater.bot.pin_chat_message(to_pin.chat_id, to_pin.message_id, disable_notification=True)
                         return
-        return
 
 
     # ---------------------------------------------
