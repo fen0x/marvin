@@ -396,7 +396,7 @@ class MarvinBot:
         # Submit to reddit, add the default comment and send the link to Telegram:
         title = "[" + self.title_prefix + self.get_user_name(reply_message) + "] " + link_page_title
         submission = subreddit.submit(title, url=link_to_post)
-        self.add_default_comment(submission, update.message.message_id)
+        self.add_default_comment(submission, update.message.reply_to_message.message_id)
         self.updater.bot.send_message(self.authorized_group_id,
                                       "Post creato: " + str(submission.shortlink) +
                                       " (da: " + self.get_user_name(update.message) + ")",
@@ -455,7 +455,7 @@ class MarvinBot:
 
         # Submit to reddit, add the default comment and send the link to Telegram:
         submission = subreddit.submit(question_title, selftext=question_content)
-        self.add_default_comment(submission, update.message.message_id)
+        self.add_default_comment(submission, update.message.reply_to_message.message_id)
         self.updater.bot.send_message(self.authorized_group_id,
                                       "Post creato: " + str(submission.shortlink) +
                                       " (da: " + self.get_user_name(update.message) + ")",
