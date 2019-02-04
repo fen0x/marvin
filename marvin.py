@@ -24,6 +24,7 @@ class MarvinBot:
     rules_file_name = "content/delete_post_rules.json"
     cookie_cache_file_name = "content/cookies.pkl"
     word_blacklist_file_name = "content/words_blacklist.json"
+    auto_pinned_posts_file_name = "content/auto_pinned_posts.json"
 
     def __init__(self, logger_ref):
         # The subreddit where the bot must post
@@ -52,6 +53,8 @@ class MarvinBot:
         self.updater = None
         # Groups in which messages come from
         self.tg_groups = {}
+        # List of autopinned posts
+        self.posts_to_pin = []
 
     # ---------------------------------------------
     # Util functions
@@ -555,6 +558,21 @@ class MarvinBot:
 
             return
 
+    def pin_if_necessary(self, to_pin, submission):
+        """ (Telegram command)
+        Pin reddit post if necessary
+        :param to_pin: the message to pin
+        :param submission: the reddit post
+        """
+        for autopin_rule in self.auto_pinned_posts:
+            if str(submission.title.lower()).find(autopin_rule["text"]) != -1:
+                for authors_pin in autopin_rule["user"]:
+                    if (authors_pin == submission.author.name.lower()):
+                        self.updater.bot.pin_chat_message(to_pin.chat_id, to_pin.message_id, disable_notification=True)
+                        return
+        return
+
+
     # ---------------------------------------------
     # Threads
     # ---------------------------------------------
@@ -575,7 +593,8 @@ class MarvinBot:
                 bot_ref.send_message(self.admin_group_id, notification_content)
             # Send notification to everyone in the authorized group
             if submission.author != self.reddit.user.me().name:
-                bot_ref.send_message(self.authorized_group_id, submission.title + "\n" + submission.shortlink)
+                to_pin = bot_ref.send_message(self.authorized_group_id, submission.title + "\n" + submission.shortlink)
+                self.pin_if_necessary(to_pin, submission)
 
     # ---------------------------------------------
     # Bot Start and Error manager
@@ -649,6 +668,14 @@ class MarvinBot:
             self.logger.error("FATAL ERROR-->" + self.word_blacklist_file_name + " FILE NOT FOUND, ABORTING...")
             quit(1)
         self.word_blacklist.sort()
+
+        # Read the autopinned posts list
+        try:
+            with open(self.auto_pinned_posts_file_name) as data_file:
+                self.auto_pinned_posts = json.load(data_file)
+        except FileNotFoundError:
+            self.logger.error("FATAL ERROR-->" + self.auto_pinned_posts_file_name + " FILE NOT FOUND, ABORTING...")
+            quit(1)
 
         # Setup requests session:
         self.session = requests.Session()
