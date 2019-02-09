@@ -350,18 +350,19 @@ class MarvinBot:
                                                   ", non in " +
                                                   str(update.message.chat.id) + " (attuale)")
             return
-        # Check if the command is used as reply to another message
-        if not update.message.reply_to_message:
-            self.delete_message_if_admin(update.message.chat, update.message.message_id)
-            self.send_tg_message_reply_or_private(update,
-                                                  "Per usare /postlink devi rispondere ad un messaggio")
-            return
         # Check if the command has been used from an administrator
         if not self.is_sender_admin(self.updater.bot, update.message.chat.id, update.message.from_user.id):
             self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.send_tg_message_reply_or_private(update,
                                                   "Spiacente, non sei un amministratore.")
             return
+        # Check if the command is used as reply to another message
+        if not update.message.reply_to_message:
+            self.delete_message_if_admin(update.message.chat, update.message.message_id)
+            self.send_tg_message_reply_or_private(update,
+                                                  "Per usare /postlink devi rispondere ad un messaggio")
+            return
+
         reply_message = update.message.reply_to_message
 
         urls_entities = reply_message.parse_entities([MessageEntity.URL])
@@ -420,17 +421,19 @@ class MarvinBot:
                                                   ", non in " +
                                                   str(update.message.chat.id) + " (attuale)")
             return
-        # Check if the command is used as reply to another message
-        if not update.message.reply_to_message:
-            self.delete_message_if_admin(update.message.chat, update.message.message_id)
-            self.send_tg_message_reply_or_private(update,
-                                                  "Per usare /posttext devi rispondere ad un messaggio")
-            return
+
         # Check if the command has been used from an administrator
         if not self.is_sender_admin(self.updater.bot, update.message.chat.id, update.message.from_user.id):
             self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.send_tg_message_reply_or_private(update,
                                                   "Spiacente, non sei un amministratore.")
+            return
+
+        # Check if the command is used as reply to another message
+        if not update.message.reply_to_message:
+            self.delete_message_if_admin(update.message.chat, update.message.message_id)
+            self.send_tg_message_reply_or_private(update,
+                                                  "Per usare /posttext devi rispondere ad un messaggio")
             return
 
         reply_message = update.message.reply_to_message
@@ -478,18 +481,21 @@ class MarvinBot:
                                                   ", non in " +
                                                   str(update.message.chat.id) + " (attuale)")
             return
-        # Check if the command is used as reply to another message
-        if not update.message.reply_to_message:
-            self.delete_message_if_admin(update.message.chat, update.message.message_id)
-            self.send_tg_message_reply_or_private(update,
-                                                  "Per usare /delrule devi rispondere ad un messaggio")
-            return
+
         # Check if the command has been used from an administrator
         if not self.is_sender_admin(self.updater.bot, update.message.chat.id, update.message.from_user.id):
             self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.send_tg_message_reply_or_private(update,
                                                   "Spiacente, non sei un amministratore.")
             return
+
+        # Check if the command is used as reply to another message
+        if not update.message.reply_to_message:
+            self.delete_message_if_admin(update.message.chat, update.message.message_id)
+            self.send_tg_message_reply_or_private(update,
+                                                  "Per usare /delrule devi rispondere ad un messaggio")
+            return
+
         # Check that the message has the url
         urls_entities = update.message.reply_to_message.parse_entities([MessageEntity.URL])
         if not urls_entities:
