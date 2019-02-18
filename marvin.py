@@ -54,6 +54,7 @@ class MarvinBot:
         # Groups in which messages come from
         self.tg_groups = {}
         # List of autopinned posts
+        self.auto_pinned_posts = None
         self.posts_to_pin = []
 
     # ---------------------------------------------
@@ -117,7 +118,7 @@ class MarvinBot:
 
     def check_blacklist(self, text):
         words = text.split()
-        words.sort();
+        words.sort()
 
         index_t = 0
         index_b = 0
@@ -313,7 +314,8 @@ class MarvinBot:
                     created_comment = submission.reply(comment_text)
                     comment_link = "https://www.reddit.com" + created_comment.permalink
                     self.updater.bot.send_message(self.authorized_group_id,
-                                                  "Commento aggiunto al post! (da: " + self.get_user_name(update.message)
+                                                  "Commento aggiunto al post! (da: " + self.get_user_name(
+                                                      update.message)
                                                   + ")\n" + comment_link,
                                                   reply_to_message_id=update.message.reply_to_message.message_id)
                     self.logger.info("Comment added to post with id: " + str(cutted_url))
@@ -579,10 +581,9 @@ class MarvinBot:
         for autopin_rule in self.auto_pinned_posts:
             if submission.title.lower().find(autopin_rule["text"]) != -1:
                 for authors_pin in autopin_rule["users"]:
-                    if (authors_pin == submission.author.name.lower()):
+                    if authors_pin == submission.author.name.lower():
                         self.updater.bot.pin_chat_message(to_pin.chat_id, to_pin.message_id, disable_notification=True)
                         return
-
 
     # ---------------------------------------------
     # Threads
