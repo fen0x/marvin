@@ -352,12 +352,7 @@ class MarvinBot:
                                                   ", non in " +
                                                   str(update.message.chat.id) + " (attuale)")
             return
-        # Check if the command has been used from an administrator
-        #if not self.is_sender_admin(self.updater.bot, update.message.chat.id, update.message.from_user.id):
-        #    self.delete_message_if_admin(update.message.chat, update.message.message_id)
-        #    self.send_tg_message_reply_or_private(update,
-        #                                          "Spiacente, non sei un amministratore.")
-        #    return
+
         # Check if the command is used as reply to another message
         if not update.message.reply_to_message:
             self.delete_message_if_admin(update.message.chat, update.message.message_id)
@@ -431,13 +426,6 @@ class MarvinBot:
                                                   ", non in " +
                                                   str(update.message.chat.id) + " (attuale)")
             return
-
-        # Check if the command has been used from an administrator
-        #if not self.is_sender_admin(self.updater.bot, update.message.chat.id, update.message.from_user.id):
-        #    self.delete_message_if_admin(update.message.chat, update.message.message_id)
-        #    self.send_tg_message_reply_or_private(update,
-        #                                          "Spiacente, non sei un amministratore.")
-        #    return
 
         # Check if the command is used as reply to another message
         if not update.message.reply_to_message:
