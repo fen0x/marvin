@@ -555,7 +555,7 @@ class MarvinBot:
             mod_object = submission.mod
             mod_object.remove()
             mod_object.lock()
-            self.updater.bot.send_message(self.authorized_group_id,
+            self.updater.bot.send_message(self.admin_group_id,
                                           "Il post è stato cancellato! (da: "
                                           + self.get_user_name(update.message) + ")",
                                           reply_to_message_id=update.message.reply_to_message.message_id)
