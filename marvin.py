@@ -352,12 +352,7 @@ class MarvinBot:
                                                   ", non in " +
                                                   str(update.message.chat.id) + " (attuale)")
             return
-        # Check if the command has been used from an administrator
-        if not self.is_sender_admin(self.updater.bot, update.message.chat.id, update.message.from_user.id):
-            self.delete_message_if_admin(update.message.chat, update.message.message_id)
-            self.send_tg_message_reply_or_private(update,
-                                                  "Spiacente, non sei un amministratore.")
-            return
+
         # Check if the command is used as reply to another message
         if not update.message.reply_to_message:
             self.delete_message_if_admin(update.message.chat, update.message.message_id)
@@ -396,8 +391,16 @@ class MarvinBot:
             self.send_tg_message_reply_or_private(update,
                                                   "Non sono riuscito a trovare il titolo della pagina")
             return
+
+        # Add language tag if specified parameter E
+        language_tag = ""
+        splitted_message = update.message.text_markdown.replace("/postlink", "").strip().split()
+        if len(splitted_message) > 0:
+            if splitted_message[0] == "E":
+                language_tag = "[ENG] "
+
         # Submit to reddit, add the default comment and send the link to Telegram:
-        title = "[" + self.title_prefix + self.get_user_name(reply_message) + "] " + link_page_title
+        title = "[" + self.title_prefix + self.get_user_name(reply_message) + "] " + language_tag + link_page_title
         submission = subreddit.submit(title, url=link_to_post)
         self.add_default_comment(submission, update.message.reply_to_message.message_id)
         self.updater.bot.send_message(self.authorized_group_id,
@@ -422,13 +425,6 @@ class MarvinBot:
                                                   str(self.authorized_group_id) + " (" + str(self.tg_group) + ")" +
                                                   ", non in " +
                                                   str(update.message.chat.id) + " (attuale)")
-            return
-
-        # Check if the command has been used from an administrator
-        if not self.is_sender_admin(self.updater.bot, update.message.chat.id, update.message.from_user.id):
-            self.delete_message_if_admin(update.message.chat, update.message.message_id)
-            self.send_tg_message_reply_or_private(update,
-                                                  "Spiacente, non sei un amministratore.")
             return
 
         # Check if the command is used as reply to another message
