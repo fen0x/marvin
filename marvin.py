@@ -209,7 +209,6 @@ class MarvinBot:
 
         # http get request to obtain video info
         contents = self.session.get(url_get)
-        # contents = urllib.request.urlopen(url_get).read()
 
         contents = str(contents.text)
         a_point = contents.find("&title=") + 7
