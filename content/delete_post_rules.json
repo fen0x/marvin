@@ -2,11 +2,28 @@
   "rules": [
     {
       "number": 1,
-      "text": "Example rule text n.1"
+      "text": "Qualunque contenuto che, a parere dei mod, non sia in linea con le tematiche e lo spirito del sub sarà rimosso. In particolare, le richieste di consigli per acquisto di hardware / software / servizi (inclusi corsi e università), dovranno essere postate come commenti nella rubrica \"Il Mercatino Digitale\""
     },
     {
       "number": 2,
-      "text": "Example rule text n.2"
+      "text": "È vietato postare link a siti il cui contenuto violi la legge italiana, in particolare quella sul diritto d'autore, siti che richiedano la registrazione per accedere ai contenuti o comunque siti pericolosi da visualizzare."
+    },
+    {
+      "number": 3,
+      "text": "È vietato postare o commentare esclusivamente a scopi autopromozionali o pubblicitari. Link a siti/blog/canali/subreddit possono essere ammessi (di tanto in tanto) solo da utenti attivi che partecipano alla vita della community."
+    },
+    {
+      "number": 4,
+      "text": "È vietato postare insulti omofobi/razzisti/sessisti, bestemmie, informazioni personali, contenuti volutamente offensivi, e contenuti NSFW non segnalati come tali."
+    },
+    {
+      "number": 5,
+      "text": "Il trolling e altri atteggiamenti similari che disturbino le discussioni sono vietati."
+    },
+    {
+      "number": 6,
+      "text": "Sono vietati annunci per la ricerca e l'offerta di lavoro, se non commentando nella rubrica settimanale \"La Gazzetta del Lavoro informatico\". Le offerte dovranno sempre essere accompagnate da un link all'annuncio postato dall'azienda."
     }
+
   ]
 }

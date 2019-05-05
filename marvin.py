@@ -548,13 +548,17 @@ class MarvinBot:
             if note_message is not None:
                 delete_comment += note_message + "\n\n"
             delete_comment += "Se hai dubbi o domande, ti preghiamo di inviare un messaggio in "
-            delete_comment += "[modmail](https://www.reddit.com/message/compose?to=%2Fr%2F" + self.subreddit + ").\n\n"
+            delete_comment += "[modmail](https://www.reddit.com/message/compose?to=%2Fr%2F" \
+                              + self.subreddit.display_name + ").\n\n"
 
             # Send the comment, remove and lock the post
-            submission.reply(delete_comment)
+            comment = submission.reply(delete_comment)
+            comment.mod.distinguish(sticky=True)
             mod_object = submission.mod
             mod_object.remove()
             mod_object.lock()
+            self.delete_message_if_admin(update.message.chat, update.message.reply_to_message.message_id)
+            self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.updater.bot.send_message(self.admin_group_id,
                                           "Il post è stato cancellato! (da: "
                                           + self.get_user_name(update.message) + ")",
