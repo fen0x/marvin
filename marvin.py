@@ -23,6 +23,8 @@ class MarvinBot:
     comment_file_name = "content/defaultComment.txt"
     rules_file_name = "content/delete_post_rules.json"
     cookie_cache_file_name = "content/cookies.pkl"
+    word_blacklist_file_name = "content/words_blacklist.json"
+    auto_pinned_posts_file_name = "content/auto_pinned_posts.json"
 
     def __init__(self, logger_ref):
         # The subreddit where the bot must post
@@ -39,6 +41,8 @@ class MarvinBot:
         self.tg_group = None
         # Reference to the reddit instance
         self.reddit = None
+        # Array used to contain all the blacklisted words
+        self.word_blacklist = []
         # Dictionary used to contain all the rules used when deleting a post
         self.rules = {}
         # Logger Reference
@@ -49,6 +53,9 @@ class MarvinBot:
         self.updater = None
         # Groups in which messages come from
         self.tg_groups = {}
+        # List of autopinned posts
+        self.auto_pinned_posts = None
+        self.posts_to_pin = []
 
     # ---------------------------------------------
     # Util functions
@@ -108,6 +115,22 @@ class MarvinBot:
             return '@' + user.username
         else:
             return user.full_name
+
+    def check_blacklist(self, text):
+        words = text.split()
+        words.sort()
+
+        index_t = 0
+        index_b = 0
+        while index_t < len(words) and index_b < len(self.word_blacklist):
+            if words[index_t] == self.word_blacklist[index_b]:
+                return words[index_t]
+            elif words[index_t] > self.word_blacklist[index_b]:
+                index_b = index_b + 1
+            else:
+                index_t = index_t + 1
+
+        return None
 
     def delete_message_with_delay(self, tg_group_id, message_id, seconds_delay):
         """
@@ -286,13 +309,24 @@ class MarvinBot:
                                                       "Non puoi commentare un post lockato!")
                 return
             else:
-                created_comment = submission.reply(comment_text)
-                comment_link = "https://www.reddit.com" + created_comment.permalink
-                self.updater.bot.send_message(self.authorized_group_id,
-                                              "Commento aggiunto al post! (da: " + self.get_user_name(update.message)
-                                              + ")\n" + comment_link,
-                                              reply_to_message_id=update.message.reply_to_message.message_id)
-                self.logger.info("Comment added to post with id:" + str(cutted_url))
+                good_check = self.check_blacklist(comment_text)
+                if good_check is None:
+                    created_comment = submission.reply(comment_text)
+                    comment_link = "https://www.reddit.com" + created_comment.permalink
+                    self.updater.bot.send_message(self.authorized_group_id,
+                                                  "Commento aggiunto al post! (da: " + self.get_user_name(
+                                                      update.message)
+                                                  + ")\n" + comment_link,
+                                                  reply_to_message_id=update.message.reply_to_message.message_id)
+                    self.logger.info("Comment added to post with id: " + str(cutted_url))
+                    return
+                else:
+                    self.delete_message_if_admin(update.message.chat, update.message.message_id)
+                    self.send_tg_message_reply_or_private(update,
+                                                          "Il tuo commento contiene la seguente parola bandita: " +
+                                                          str(good_check)
+                                                          )
+                    return
         else:
             self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.send_tg_message_reply_or_private(update,
@@ -318,18 +352,14 @@ class MarvinBot:
                                                   ", non in " +
                                                   str(update.message.chat.id) + " (attuale)")
             return
+
         # Check if the command is used as reply to another message
         if not update.message.reply_to_message:
             self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.send_tg_message_reply_or_private(update,
                                                   "Per usare /postlink devi rispondere ad un messaggio")
             return
-        # Check if the command has been used from an administrator
-        if not self.is_sender_admin(self.updater.bot, update.message.chat.id, update.message.from_user.id):
-            self.delete_message_if_admin(update.message.chat, update.message.message_id)
-            self.send_tg_message_reply_or_private(update,
-                                                  "Spiacente, non sei un amministratore.")
-            return
+
         reply_message = update.message.reply_to_message
 
         urls_entities = reply_message.parse_entities([MessageEntity.URL])
@@ -361,10 +391,18 @@ class MarvinBot:
             self.send_tg_message_reply_or_private(update,
                                                   "Non sono riuscito a trovare il titolo della pagina")
             return
+
+        # Add language tag if specified parameter E
+        language_tag = ""
+        splitted_message = update.message.text_markdown.replace("/postlink", "").strip().split()
+        if len(splitted_message) > 0:
+            if splitted_message[0] == "E":
+                language_tag = "[ENG] "
+
         # Submit to reddit, add the default comment and send the link to Telegram:
-        title = "[" + self.title_prefix + self.get_user_name(reply_message) + "] " + link_page_title
+        title = "[" + self.title_prefix + self.get_user_name(reply_message) + "] " + language_tag + link_page_title
         submission = subreddit.submit(title, url=link_to_post)
-        self.add_default_comment(submission, update.message.message_id)
+        self.add_default_comment(submission, update.message.reply_to_message.message_id)
         self.updater.bot.send_message(self.authorized_group_id,
                                       "Post creato: " + str(submission.shortlink) +
                                       " (da: " + self.get_user_name(update.message) + ")",
@@ -388,17 +426,12 @@ class MarvinBot:
                                                   ", non in " +
                                                   str(update.message.chat.id) + " (attuale)")
             return
+
         # Check if the command is used as reply to another message
         if not update.message.reply_to_message:
             self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.send_tg_message_reply_or_private(update,
                                                   "Per usare /posttext devi rispondere ad un messaggio")
-            return
-        # Check if the command has been used from an administrator
-        if not self.is_sender_admin(self.updater.bot, update.message.chat.id, update.message.from_user.id):
-            self.delete_message_if_admin(update.message.chat, update.message.message_id)
-            self.send_tg_message_reply_or_private(update,
-                                                  "Spiacente, non sei un amministratore.")
             return
 
         reply_message = update.message.reply_to_message
@@ -423,7 +456,7 @@ class MarvinBot:
 
         # Submit to reddit, add the default comment and send the link to Telegram:
         submission = subreddit.submit(question_title, selftext=question_content)
-        self.add_default_comment(submission, update.message.message_id)
+        self.add_default_comment(submission, update.message.reply_to_message.message_id)
         self.updater.bot.send_message(self.authorized_group_id,
                                       "Post creato: " + str(submission.shortlink) +
                                       " (da: " + self.get_user_name(update.message) + ")",
@@ -446,18 +479,21 @@ class MarvinBot:
                                                   ", non in " +
                                                   str(update.message.chat.id) + " (attuale)")
             return
-        # Check if the command is used as reply to another message
-        if not update.message.reply_to_message:
-            self.delete_message_if_admin(update.message.chat, update.message.message_id)
-            self.send_tg_message_reply_or_private(update,
-                                                  "Per usare /delrule devi rispondere ad un messaggio")
-            return
+
         # Check if the command has been used from an administrator
         if not self.is_sender_admin(self.updater.bot, update.message.chat.id, update.message.from_user.id):
             self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.send_tg_message_reply_or_private(update,
                                                   "Spiacente, non sei un amministratore.")
             return
+
+        # Check if the command is used as reply to another message
+        if not update.message.reply_to_message:
+            self.delete_message_if_admin(update.message.chat, update.message.message_id)
+            self.send_tg_message_reply_or_private(update,
+                                                  "Per usare /delrule devi rispondere ad un messaggio")
+            return
+
         # Check that the message has the url
         urls_entities = update.message.reply_to_message.parse_entities([MessageEntity.URL])
         if not urls_entities:
@@ -523,10 +559,11 @@ class MarvinBot:
             mod_object.lock()
             self.delete_message_if_admin(update.message.chat, update.message.reply_to_message.message_id)
             self.delete_message_if_admin(update.message.chat, update.message.message_id)
-            self.updater.bot.send_message(self.authorized_group_id,
+            self.updater.bot.send_message(self.admin_group_id,
                                           "Il post è stato cancellato! (da: "
-                                          + self.get_user_name(update.message) + ")")
-            self.logger.info("Post with id:" + str(cutted_url) + " has been deleted from Telegram")
+                                          + self.get_user_name(update.message) + ")",
+                                          reply_to_message_id=update.message.reply_to_message.message_id)
+            self.logger.info("Post with id: " + str(cutted_url) + " has been deleted from Telegram")
         else:
             self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.send_tg_message_reply_or_private(update,
@@ -534,6 +571,19 @@ class MarvinBot:
                                                   self.subreddit.display_name)
 
             return
+
+    def pin_if_necessary(self, to_pin, submission):
+        """ (Telegram command)
+        Pin reddit post if necessary
+        :param to_pin: the message to pin
+        :param submission: the reddit post
+        """
+        for autopin_rule in self.auto_pinned_posts:
+            if submission.title.lower().find(autopin_rule["text"]) != -1:
+                for authors_pin in autopin_rule["users"]:
+                    if authors_pin == submission.author.name.lower():
+                        self.updater.bot.pin_chat_message(to_pin.chat_id, to_pin.message_id, disable_notification=True)
+                        return
 
     # ---------------------------------------------
     # Threads
@@ -555,7 +605,8 @@ class MarvinBot:
                 bot_ref.send_message(self.admin_group_id, notification_content)
             # Send notification to everyone in the authorized group
             if submission.author != self.reddit.user.me().name:
-                bot_ref.send_message(self.authorized_group_id, submission.title + "\n" + submission.shortlink)
+                to_pin = bot_ref.send_message(self.authorized_group_id, submission.title + "\n" + submission.shortlink)
+                self.pin_if_necessary(to_pin, submission)
 
     # ---------------------------------------------
     # Bot Start and Error manager
@@ -589,6 +640,7 @@ class MarvinBot:
     def main(self):
         """Start the bot."""
         self.logger.info("Starting bot... Reading login Token...")
+
         # Read the token from the json
         bot_data_file = None
         try:
@@ -598,6 +650,7 @@ class MarvinBot:
             self.logger.error("FATAL ERROR-->" + self.config_file_name + " FILE NOT FOUND, ABORTING...")
             quit(1)
         self.logger.info("Starting bot... Reading informations from files...")
+
         # Read the default comment data
         try:
             file = io.open(self.comment_file_name, mode="r", encoding="utf-8")
@@ -606,6 +659,7 @@ class MarvinBot:
         except FileNotFoundError:
             self.logger.error("FATAL ERROR-->" + self.comment_file_name + " FILE NOT FOUND, ABORTING...")
             quit(1)
+
         # Read the rules used to delete a post
         try:
             with open(self.rules_file_name) as data_file:
@@ -613,7 +667,26 @@ class MarvinBot:
                 for current_rule in rules_list["rules"]:
                     self.rules[current_rule["number"]] = current_rule["text"]
         except FileNotFoundError:
-            self.logger.error("FATAL ERROR-->" + self.config_file_name + " FILE NOT FOUND, ABORTING...")
+            self.logger.error("FATAL ERROR-->" + self.rules_file_name + " FILE NOT FOUND, ABORTING...")
+            quit(1)
+
+        # Read the blacklisted words
+        try:
+            with open(self.word_blacklist_file_name) as data_file:
+                word_blacklist2 = json.load(data_file)
+                for current_word in word_blacklist2["words"]:
+                    self.word_blacklist.append(current_word)
+        except FileNotFoundError:
+            self.logger.error("FATAL ERROR-->" + self.word_blacklist_file_name + " FILE NOT FOUND, ABORTING...")
+            quit(1)
+        self.word_blacklist.sort()
+
+        # Read the autopinned posts list
+        try:
+            with open(self.auto_pinned_posts_file_name) as data_file:
+                self.auto_pinned_posts = json.load(data_file)
+        except FileNotFoundError:
+            self.logger.error("FATAL ERROR-->" + self.auto_pinned_posts_file_name + " FILE NOT FOUND, ABORTING...")
             quit(1)
 
         # Setup requests session:
