@@ -286,12 +286,23 @@ class MarvinBot:
                                                   "Per usare questo comando devi rispondere "
                                                   "ad un messaggio del bot contenente un link")
             return
-        # Get the comment content, post id and post the comment
+
+        # Get the comment content
+        comment_content = update.message.text_markdown  # Full comment content
+        if comment_content.replace("/comment", "").strip() == '':
+            # Empty comment, remove the post
+            self.delete_message_if_admin(update.message.chat, update.message.message_id)
+            return
+
+        # Remove the first word, because it is /comment (also remove different characters, such as /commenta)
+        comment_content = comment_content.split(' ', 1)[1].strip()
+
+        # Add header for the comment in the subreddit
         comment_text = "\\[[Telegram](https://t.me/" + str(self.tg_group) + "/" + str(update.message.message_id) + "/)"
         username = self.get_user_name(update.message)
         comment_text += " - "
         comment_text += "[" + username + "](https://t.me/" + username[1:] + ")" + "\\]  \n"
-        comment_text += update.message.text_markdown.replace("/comment", "").strip()
+        comment_text += comment_content
         url = urls_entities.popitem()[1]
         try:
             cutted_url = models.Submission.id_from_url(url)
@@ -622,15 +633,17 @@ class MarvinBot:
 
     def message_handler(self, bot, update):
         if update.message.text is not None and update.message.text.startswith("/"):
-            if update.message.text.startswith("/start"):
+            # Use first word as command
+            command = update.message.text.split(' ', 1)[0].strip()
+            if command == "/start":
                 self.start(update)
-            elif update.message.text.startswith("/comment"):
+            elif command == "/comment":
                 self.comment(update)
-            elif update.message.text.startswith("/postlink"):
+            elif command == "/postlink":
                 self.postlink(self.subreddit, update)
-            elif update.message.text.startswith("/posttext"):
+            elif command == "/posttext":
                 self.posttext(self.subreddit, update)
-            elif update.message.text.startswith("/delrule"):
+            elif command == "/delrule":
                 self.delrule(update)
             else:
                 self.delete_message_if_admin(update.message.chat, update.message.message_id, 5)
