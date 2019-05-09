@@ -286,12 +286,23 @@ class MarvinBot:
                                                   "Per usare questo comando devi rispondere "
                                                   "ad un messaggio del bot contenente un link")
             return
-        # Get the comment content, post id and post the comment
+
+        # Get the comment content
+        comment_content = update.message.text_markdown  # Full comment content
+        if comment_content.replace("/comment", "").strip() == '':
+            # Empty comment, remove the post
+            self.delete_message_if_admin(update.message.chat, update.message.message_id)
+            return
+
+        # Remove the first word, because it is /comment (also remove different characters, such as /commenta)
+        comment_content = comment_content.split(' ', 1)[1].strip()
+
+        # Add header for the comment in the subreddir
         comment_text = "\\[[Telegram](https://t.me/" + str(self.tg_group) + "/" + str(update.message.message_id) + "/)"
         username = self.get_user_name(update.message)
         comment_text += " - "
         comment_text += "[" + username + "](https://t.me/" + username[1:] + ")" + "\\]  \n"
-        comment_text += update.message.text_markdown.replace("/comment", "").strip()
+        comment_text += comment_content
         url = urls_entities.popitem()[1]
         try:
             cutted_url = models.Submission.id_from_url(url)
