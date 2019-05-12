@@ -559,9 +559,8 @@ class MarvinBot:
             self.delete_message_if_admin(update.message.chat, update.message.reply_to_message.message_id)
             self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.updater.bot.send_message(self.admin_group_id,
-                                          "Il post è stato cancellato! (da: "
-                                          + self.get_user_name(update.message) + ")",
-                                          reply_to_message_id=update.message.reply_to_message.message_id)
+                                          "Il post (" + url + ") è stato cancellato! (da: "
+                                          + self.get_user_name(update.message) + ")")
             self.logger.info("Post with id: " + str(cutted_url) + " has been deleted from Telegram")
         else:
             self.delete_message_if_admin(update.message.chat, update.message.message_id)
