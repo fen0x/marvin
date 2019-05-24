@@ -597,7 +597,8 @@ class MarvinBot:
                                                   ", non in " +
                                                   str(update.message.chat.id) + " (attuale)")
             return
-        to_tag = ""
+        to_tag = "I seguenti admin non sono stati contattati in privato e verranno taggati:\n"
+        should_tag_in_group = False
         try:
             for single_admin in self.updater.bot.get_chat_administrators(update.message.chat.id):
                 try:
@@ -606,7 +607,8 @@ class MarvinBot:
                 except TelegramError:
                     if single_admin.user.username:
                         to_tag += "@" + single_admin.user.username + "\n"
-            if len(to_tag) > 0:
+                        should_tag_in_group = True
+            if should_tag_in_group:
                 self.updater.bot.send_message(update.message.chat.id, to_tag)
         except TelegramError as e:
             self.updater.bot.send_message(update.message.chat.id, "Errore nella richiesta per la lista di admin [" + e.message + "]")
