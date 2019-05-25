@@ -581,6 +581,39 @@ class MarvinBot:
 
             return
 
+    def admin(self, update):
+        """ (Telegram command)
+        Calls every admin available
+        :param update: update: an object that represents an incoming update.
+        """
+
+        # Check if the command has been used in the correct group
+        if not self.is_message_in_correct_group(update.message.chat):
+            self.delete_message_if_admin(update.message.chat, update.message.message_id)
+            self.send_tg_message_reply_or_private(update,
+                                                  "Spiacente, questo bot funziona solo nel"
+                                                  "gruppo autorizzato con id " +
+                                                  str(self.authorized_group_id) + " (" + str(self.tg_group) + ")" +
+                                                  ", non in " +
+                                                  str(update.message.chat.id) + " (attuale)")
+            return
+        to_tag = "I seguenti admin non sono stati contattati in privato e verranno taggati:\n"
+        should_tag_in_group = False
+        try:
+            for single_admin in self.updater.bot.get_chat_administrators(update.message.chat.id):
+                try:
+                    self.updater.bot.send_message(single_admin.user.id, "E' stato richiesto un intervento nel gruppo con id " +
+                    str(self.authorized_group_id) + " (" + str(self.tg_group) + ")")
+                except TelegramError:
+                    if single_admin.user.username:
+                        to_tag += "@" + single_admin.user.username + "\n"
+                        should_tag_in_group = True
+            if should_tag_in_group:
+                self.updater.bot.send_message(update.message.chat.id, to_tag)
+        except TelegramError as e:
+            self.updater.bot.send_message(update.message.chat.id, "Errore nella richiesta per la lista di admin [" + e.message + "]")
+        return
+
     def pin_if_necessary(self, to_pin, submission):
         """ (Telegram command)
         Pin reddit post if necessary
@@ -644,6 +677,8 @@ class MarvinBot:
                 self.posttext(self.subreddit, update)
             elif command == "/delrule":
                 self.delrule(update)
+            elif command == "/admin":
+                self.admin(update)
             else:
                 self.delete_message_if_admin(update.message.chat, update.message.message_id, 5)
         return
