@@ -13,7 +13,7 @@ from lxml.html import fromstring
 from urllib import parse as urlparse
 from urllib.parse import unquote
 from telegram import MessageEntity, ChatMember, Chat, TelegramError
-from telegram.ext import MessageHandler, Updater
+from telegram.ext import MessageHandler, Updater, Filters
 from time import sleep
 
 
@@ -21,6 +21,7 @@ class MarvinBot:
     # The files to open on startup
     config_file_name = "content/bot_data.json"
     comment_file_name = "content/defaultComment.txt"
+    welcome_message_file_name = "content/welcome_message.txt"
     rules_file_name = "content/delete_post_rules.json"
     cookie_cache_file_name = "content/cookies.pkl"
     word_blacklist_file_name = "content/words_blacklist.json"
@@ -104,13 +105,15 @@ class MarvinBot:
         return user_info.status == ChatMember.ADMINISTRATOR or user_info.status == ChatMember.CREATOR
 
     @staticmethod
-    def get_user_name(message):
+    def get_user_name(message, user=None):
         """
         Get the best user name from Telegram
         :param message: the message
+        :param user: the user to extract the nickname
         :return: The user nickname when available, the full name otherwise
         """
-        user = message.from_user
+        if user is None:
+            user = message.from_user
         if user.username is not None:
             return '@' + user.username
         else:
@@ -610,6 +613,22 @@ class MarvinBot:
     # Bot Start and Error manager
     # ---------------------------------------------
 
+    def welcome(self, bot, update):
+        """
+        An event for when a new User join the group
+        :param bot: an object that represents a Telegram Bot.
+        :param update: an object that represents an incoming update.
+        """
+        for new_user_obj in update.message.new_chat_members:
+            chat_id = update.message.chat.id
+            new_user = self.get_user_name(None, new_user_obj)
+            welcome_message = open(self.welcome_message_file_name, 'r').read()
+            welcome_message = welcome_message.replace("{USER}", str(new_user))
+            welcome_message = welcome_message.replace("{LINK}",
+                                                      "https://www.reddit.com/r/ItalyInformatica/wiki/telegramrules")
+
+            bot.send_message(chat_id=chat_id, text=welcome_message)
+
     def error_handler(self, bot, update, error):
         """
         Log Errors caused by telegram Updates.
@@ -721,6 +740,9 @@ class MarvinBot:
         self.logger.info("Starting bot... Setting handler...")
         # Get the dispatcher to register handlers
         dp = self.updater.dispatcher
+
+        # Welcome message
+        dp.add_handler(MessageHandler(Filters.status_update.new_chat_members, self.welcome))
 
         # Register commands
         dp.add_handler(MessageHandler(filters=None, callback=self.message_handler))
