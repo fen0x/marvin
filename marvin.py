@@ -6,6 +6,8 @@ import requests
 import io
 import datetime
 import pickle
+import re
+import html
 
 from threading import Thread
 from praw import Reddit, exceptions, models
@@ -205,19 +207,13 @@ class MarvinBot:
         :returns video title
         """
 
-        url_get = "https://youtube.com/get_video_info?video_id=" + video_id
+        url_get = "https://www.youtube.com/watch?v=" + video_id
 
         # http get request to obtain video info
         contents = self.session.get(url_get)
+        title = re.search("<title>([\w\W]*)<\/title>",contents.text)
+        return "[YouTube] "+ html.unescape(title.group(1)[0:-10])
 
-        contents = str(contents.text)
-        a_point = contents.find("&title=") + 7
-        contents = contents[a_point:]
-        b_point = contents.find("&")
-        contents = contents[:b_point]
-        contents = contents.replace("+", " ")
-        contents_decoded = unquote(contents)
-        return "[YouTube] " + contents_decoded
 
     def send_tg_message_reply_or_private(self, update, text):
         """
