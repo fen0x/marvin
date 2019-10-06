@@ -14,9 +14,19 @@ from praw import Reddit, exceptions, models
 from lxml.html import fromstring
 from urllib import parse as urlparse
 from urllib.parse import unquote
-from telegram import MessageEntity, ChatMember, Chat, TelegramError
-from telegram.ext import MessageHandler, Updater, Filters
+from telegram import MessageEntity, ChatMember, ChatPermissions, Chat, TelegramError
+from telegram.ext import MessageHandler, Updater, Filters, BaseFilter
 from time import sleep
+
+from antiflood import Antiflood
+
+
+class AntifloodFilter(BaseFilter):
+    def __init__(self, antiflood):
+        self.antiflood = antiflood
+
+    def filter(self, message):
+        return self.antiflood.is_flooding(message.from_user.user_id)
 
 
 class MarvinBot:
@@ -678,6 +688,20 @@ class MarvinBot:
         """
         self.logger.warning('\nUpdate status:\n"%s"\nCaused error:\n"%s"', update, error)
 
+    def flooder_handler(self, bot, update):
+        """
+        User is flooding, take some action.
+        """
+        user_id = update.effective_user.id
+        self.logger.info("User is flooding: %s", user_id)
+        if self.antiflood_action == "none":
+            return
+        elif self.antiflood_action == "mute":
+            chat_id = update.message.chat.id
+            new_permissions = ChatPermissions(can_send_messages=False)
+            bot.restrict_chat_member(chat_id, user_id, new_permissions)
+
+
     def message_handler(self, bot, update):
         if update.message.text is not None and update.message.text.startswith("/"):
             # Use first word as command
@@ -778,12 +802,19 @@ class MarvinBot:
         self.tg_group = bot_data_file["telegram"]["tg_group"]
         # Read the prefix to the post title
         self.title_prefix = bot_data_file["reddit"]["title_prefix"]
+        # set action for flooders, must be one of NONE, MUTE
+        self.antiflood_action = bot_data_file["telegram"]["antiflood_action"]
         # Create the EventHandler and pass it your bot's token.
         self.logger.info("Starting bot... Logging in on Telegram...")
         self.updater = Updater(bot_data_file["telegram"]["login_token"])
         self.logger.info("Starting bot... Setting handler...")
         # Get the dispatcher to register handlers
         dp = self.updater.dispatcher
+
+        # Initialize antiflood class and handlers
+        self.antiflood = Antiflood(bot_data_file["telegram"]["antiflood_time_limit"], bot_data_file["telegram"]["antiflood_count_limit"])
+        dp.add_handler(MessageHandler(AntifloodFilter(self.antiflood), callback=self.flooder_handler))
+
 
         # Welcome message
         dp.add_handler(MessageHandler(Filters.status_update.new_chat_members, self.welcome))

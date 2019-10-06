@@ -3,7 +3,10 @@
     "login_token": "TOKEN",
     "authorized_group_id": 0,
     "admin_group_id": 0,
-    "tg_group" : "UsernameTest"
+    "tg_group" : "UsernameTest",
+    "antiflood_action": "mute",
+    "antiflood_time_limit": "20",
+    "antiflood_count_limit": "10"
   },
   "reddit": {
     "subreddit_name": "ItalyInformaticaTest",
