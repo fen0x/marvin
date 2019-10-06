@@ -600,6 +600,10 @@ class MarvinBot:
         should_tag_in_group = False
         try:
             for single_admin in self.updater.bot.get_chat_administrators(update.message.chat.id):
+                if single_admin.user.username == self.updater.bot.name:
+                    # Skip the bot itself
+                    continue
+
                 try:
                     self.updater.bot.send_message(single_admin.user.id, "E' stato richiesto un intervento nel gruppo con id " +
                     str(self.authorized_group_id) + " (" + str(self.tg_group) + ")")
