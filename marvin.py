@@ -601,6 +601,9 @@ class MarvinBot:
         try:
             for single_admin in self.updater.bot.get_chat_administrators(update.message.chat.id):
                 try:
+                    if single_admin.user.username == self.updater.bot.username:
+                        # Skip the bot itself
+                        continue
                     self.updater.bot.send_message(single_admin.user.id, "E' stato richiesto un intervento nel gruppo con id " +
                     str(self.authorized_group_id) + " (" + str(self.tg_group) + ")")
                 except TelegramError:
