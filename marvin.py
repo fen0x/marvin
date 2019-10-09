@@ -496,7 +496,7 @@ class MarvinBot:
             return
 
         # Check if the command is used as reply to another message
-        reply_to_message: bool = False
+        reply_to_message = False
         if not update.message.reply_to_message:
             # If no see if it contains an url
             urls_entities = update.message.parse_entities([MessageEntity.URL])
