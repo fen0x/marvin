@@ -214,9 +214,8 @@ class MarvinBot:
 
         # http get request to obtain video info
         contents = self.session.get(url_get)
-        title = re.search("<title>([\w\W]*)<\/title>",contents.text)
-        return "[YouTube] "+ html.unescape(title.group(1)[0:-10])
-
+        title = re.search("<title>([\w\W]*)<\/title>", contents.text)
+        return "[YouTube] " + html.unescape(title.group(1)[0:-10])
 
     def send_tg_message_reply_or_private(self, update, text):
         """
@@ -497,7 +496,7 @@ class MarvinBot:
             return
 
         # Check if the command is used as reply to another message
-        reply_to_message:bool = False
+        reply_to_message: bool = False
         if not update.message.reply_to_message:
             # If no see if it contains an url
             urls_entities = update.message.parse_entities([MessageEntity.URL])
@@ -614,8 +613,9 @@ class MarvinBot:
                     if single_admin.user.username == self.updater.bot.username:
                         # Skip the bot itself
                         continue
-                    self.updater.bot.send_message(single_admin.user.id, "E' stato richiesto un intervento nel gruppo con id " +
-                    str(self.authorized_group_id) + " (" + str(self.tg_group) + ")")
+                    self.updater.bot.send_message(single_admin.user.id,
+                                                  "E' stato richiesto un intervento nel gruppo con id " +
+                                                  str(self.authorized_group_id) + " (" + str(self.tg_group) + ")")
                 except TelegramError:
                     if single_admin.user.username:
                         to_tag += "@" + single_admin.user.username + "\n"
@@ -623,7 +623,8 @@ class MarvinBot:
             if should_tag_in_group:
                 self.updater.bot.send_message(update.message.chat.id, to_tag)
         except TelegramError as e:
-            self.updater.bot.send_message(update.message.chat.id, "Errore nella richiesta per la lista di admin [" + e.message + "]")
+            self.updater.bot.send_message(update.message.chat.id,
+                                          "Errore nella richiesta per la lista di admin [" + e.message + "]")
         return
 
     def pin_if_necessary(self, to_pin, submission):
