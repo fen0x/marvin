@@ -497,20 +497,26 @@ class MarvinBot:
             return
 
         # Check if the command is used as reply to another message
+        reply_to_message:bool = False
         if not update.message.reply_to_message:
-            self.delete_message_if_admin(update.message.chat, update.message.message_id)
-            self.send_tg_message_reply_or_private(update,
-                                                  "Per usare /delrule devi rispondere ad un messaggio")
-            return
-
-        # Check that the message has the url
-        urls_entities = update.message.reply_to_message.parse_entities([MessageEntity.URL])
-        if not urls_entities:
-            self.delete_message_if_admin(update.message.chat, update.message.message_id)
-            self.send_tg_message_reply_or_private(update,
-                                                  "Per usare questo comando devi rispondere "
-                                                  "ad un messaggio del bot contenente un link")
-            return
+            # If no see if it contains an url
+            urls_entities = update.message.parse_entities([MessageEntity.URL])
+            if not urls_entities:
+                self.delete_message_if_admin(update.message.chat, update.message.message_id)
+                self.send_tg_message_reply_or_private(update,
+                                                      "Il messaggio originale deve contenere una URL "
+                                                      "o rispondere ad un messaggio con una URL")
+                return
+        else:
+            # Check that the reply message has the url
+            urls_entities = update.message.reply_to_message.parse_entities([MessageEntity.URL])
+            reply_to_message = True
+            if not urls_entities:
+                self.delete_message_if_admin(update.message.chat, update.message.message_id)
+                self.send_tg_message_reply_or_private(update,
+                                                      "Se rispondi ad un messaggio per eliminare un post, "
+                                                      "il messaggio a cui rispondi deve contenere un link")
+                return
         # Get the rule content, post the comment and delete the post
         url = urls_entities.popitem()[1]
         try:
@@ -532,7 +538,10 @@ class MarvinBot:
             return
         elif len(splitted_message) >= 1:
             try:
-                rule_number = int(splitted_message[0])
+                if reply_to_message:
+                    rule_number = int(splitted_message[0])
+                else:
+                    rule_number = int(splitted_message[1])
             except ValueError:
                 self.delete_message_if_admin(update.message.chat, update.message.message_id)
                 self.send_tg_message_reply_or_private(update,
@@ -566,7 +575,8 @@ class MarvinBot:
             mod_object = submission.mod
             mod_object.remove()
             mod_object.lock()
-            self.delete_message_if_admin(update.message.chat, update.message.reply_to_message.message_id)
+            if reply_to_message:
+                self.delete_message_if_admin(update.message.chat, update.message.reply_to_message.message_id)
             self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.updater.bot.send_message(self.admin_group_id,
                                           "Il post (" + url + ") è stato cancellato! (da: "
