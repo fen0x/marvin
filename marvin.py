@@ -557,12 +557,15 @@ class MarvinBot:
         # Read the note message if present
         if len(splitted_message) > 1:
             note_message = update.message.text_markdown.replace("/delrule", "").replace(str(rule_number), "").strip()
+            if not reply_to_message:
+                note_message = note_message.replace(str(url), "").strip()
+
         submission = self.reddit.submission(id=cutted_url)
         if submission.subreddit.display_name == self.subreddit.display_name:
             # Create delete comment
             delete_comment = "Il tuo post è stato rimosso per la violazione del seguente articolo del regolamento:\n\n"
             delete_comment += "* " + rule_text + "\n\n"
-            if note_message is not None:
+            if note_message is not None and len(note_message) > 1:
                 delete_comment += note_message + "\n\n"
             delete_comment += "Se hai dubbi o domande, ti preghiamo di inviare un messaggio in "
             delete_comment += "[modmail](https://www.reddit.com/message/compose?to=%2Fr%2F" \
