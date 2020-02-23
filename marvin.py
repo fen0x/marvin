@@ -374,12 +374,12 @@ class MarvinBot:
         if not urls_entities:
             self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.send_tg_message_reply_or_private(update,
-                                                  "Il messaggio originale deve contenere una URL")
+                                                  "Il messaggio originale deve contenere un URL")
             return
         if len(urls_entities) > 1:
             self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.send_tg_message_reply_or_private(update,
-                                                  "Il messaggio originale deve contenere una **sola** URL")
+                                                  "Il messaggio originale deve contenere un **solo** URL")
             return
 
         link_to_post = urls_entities.popitem()[1]
