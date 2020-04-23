@@ -630,6 +630,30 @@ class MarvinBot:
                                           "Errore nella richiesta per la lista di admin [" + e.message + "]")
         return
 
+        def postsureddit(self, update):
+        """ (Telegram command)
+        Send a message which invites the user
+        to post that question on the subreddit.
+        """
+
+        # Check if the command has been used in the correct group
+        if not self.is_message_in_correct_group(update.message.chat):
+            self.delete_message_if_admin(update.message.chat, update.message.message_id)
+            self.send_tg_message_reply_or_private(update,
+                                                  "Spiacente, questo bot funziona solo nel"
+                                                  "gruppo autorizzato con id " +
+                                                  str(self.authorized_group_id) + " (" + str(self.tg_group) + ")" +
+                                                  ", non in " +
+                                                  str(update.message.chat.id) + " (attuale)")
+            return
+        try:
+            self.updater.bot.send_message(update.message.chat.id,
+                                          "Le parole del professor Ve rimbombano \n\n 'Qui siamo 500 persone (bot più bot meno), il subreddit conta +13000 persone. Se tu facessi un post sul subreddit invece di chiedere qui raggiungeresti circa 20 volte le persone che raggiungeresti qui. Inoltre questo gruppo non è un gruppo di supporto in quanto è strettamente correlato con gli argomenti del subreddit stesso. Scrivere un post lì invece di chiedere qui è una win-win condition per tutti. Sappiamo che potrebbe essere scocciante dover aprire Reddit per creare il post, infatti c'è la possibilità di creare il post senza neanche doversi muovere da qui, con il comando /posttext. Il suo funzionamento è il seguente: Scrivi la domanda qui (in un unico messaggio) ed inviala, poi rispondi al messaggio appena creato con /posttext <titolo del post>.'")
+        except TelegramError as e:
+            self.updater.bot.send_message(update.message.chat.id,
+                                          "Errore nella richiesta per la lista di admin [" + e.message + "]")
+        return
+
     def pin_if_necessary(self, to_pin, submission):
         """ (Telegram command)
         Pin reddit post if necessary
