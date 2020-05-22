@@ -713,7 +713,9 @@ class MarvinBot:
                 self.admin(update)
             else:
                 self.delete_message_if_admin(update.message.chat, update.message.message_id, 5)
-        return
+
+        elif update.message.text is not None and "@admin" in update.message.text:
+            self.admin(update)
 
     def main(self):
         """Start the bot."""
