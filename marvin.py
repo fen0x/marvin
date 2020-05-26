@@ -625,6 +625,8 @@ class MarvinBot:
                         should_tag_in_group = True
             if should_tag_in_group:
                 self.updater.bot.send_message(update.message.chat.id, to_tag)
+            else:
+                self.updater.bot.send_message(update.message.chat.id, "Gli Admin sono stati contattati.")
         except TelegramError as e:
             self.updater.bot.send_message(update.message.chat.id,
                                           "Errore nella richiesta per la lista di admin [" + e.message + "]")
