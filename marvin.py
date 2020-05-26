@@ -6,6 +6,8 @@ import requests
 import io
 import datetime
 import pickle
+import re
+import html
 
 from threading import Thread
 from praw import Reddit, exceptions, models
@@ -13,7 +15,7 @@ from lxml.html import fromstring
 from urllib import parse as urlparse
 from urllib.parse import unquote
 from telegram import MessageEntity, ChatMember, Chat, TelegramError
-from telegram.ext import MessageHandler, Updater
+from telegram.ext import MessageHandler, Updater, Filters
 from time import sleep
 
 
@@ -21,6 +23,7 @@ class MarvinBot:
     # The files to open on startup
     config_file_name = "content/bot_data.json"
     comment_file_name = "content/defaultComment.txt"
+    welcome_message_file_name = "content/welcome_message.txt"
     rules_file_name = "content/delete_post_rules.json"
     cookie_cache_file_name = "content/cookies.pkl"
     word_blacklist_file_name = "content/words_blacklist.json"
@@ -104,13 +107,15 @@ class MarvinBot:
         return user_info.status == ChatMember.ADMINISTRATOR or user_info.status == ChatMember.CREATOR
 
     @staticmethod
-    def get_user_name(message):
+    def get_user_name(message, user=None):
         """
         Get the best user name from Telegram
         :param message: the message
+        :param user: the user to extract the nickname
         :return: The user nickname when available, the full name otherwise
         """
-        user = message.from_user
+        if user is None:
+            user = message.from_user
         if user.username is not None:
             return '@' + user.username
         else:
@@ -205,19 +210,12 @@ class MarvinBot:
         :returns video title
         """
 
-        url_get = "https://youtube.com/get_video_info?video_id=" + video_id
+        url_get = "https://www.youtube.com/watch?v=" + video_id
 
         # http get request to obtain video info
         contents = self.session.get(url_get)
-
-        contents = str(contents.text)
-        a_point = contents.find("&title=") + 7
-        contents = contents[a_point:]
-        b_point = contents.find("&")
-        contents = contents[:b_point]
-        contents = contents.replace("+", " ")
-        contents_decoded = unquote(contents)
-        return "[YouTube] " + contents_decoded
+        title = re.search("<title>([\w\W]*)<\/title>", contents.text)
+        return "[YouTube] " + html.unescape(title.group(1)[0:-10])
 
     def send_tg_message_reply_or_private(self, update, text):
         """
@@ -376,12 +374,12 @@ class MarvinBot:
         if not urls_entities:
             self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.send_tg_message_reply_or_private(update,
-                                                  "Il messaggio originale deve contenere una URL")
+                                                  "Il messaggio originale deve contenere un URL")
             return
         if len(urls_entities) > 1:
             self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.send_tg_message_reply_or_private(update,
-                                                  "Il messaggio originale deve contenere una **sola** URL")
+                                                  "Il messaggio originale deve contenere un **solo** URL")
             return
 
         link_to_post = urls_entities.popitem()[1]
@@ -498,20 +496,26 @@ class MarvinBot:
             return
 
         # Check if the command is used as reply to another message
+        reply_to_message = False
         if not update.message.reply_to_message:
-            self.delete_message_if_admin(update.message.chat, update.message.message_id)
-            self.send_tg_message_reply_or_private(update,
-                                                  "Per usare /delrule devi rispondere ad un messaggio")
-            return
-
-        # Check that the message has the url
-        urls_entities = update.message.reply_to_message.parse_entities([MessageEntity.URL])
-        if not urls_entities:
-            self.delete_message_if_admin(update.message.chat, update.message.message_id)
-            self.send_tg_message_reply_or_private(update,
-                                                  "Per usare questo comando devi rispondere "
-                                                  "ad un messaggio del bot contenente un link")
-            return
+            # If no see if it contains an url
+            urls_entities = update.message.parse_entities([MessageEntity.URL])
+            if not urls_entities:
+                self.delete_message_if_admin(update.message.chat, update.message.message_id)
+                self.send_tg_message_reply_or_private(update,
+                                                      "Il messaggio originale deve contenere una URL "
+                                                      "o rispondere ad un messaggio con una URL")
+                return
+        else:
+            # Check that the reply message has the url
+            urls_entities = update.message.reply_to_message.parse_entities([MessageEntity.URL])
+            reply_to_message = True
+            if not urls_entities:
+                self.delete_message_if_admin(update.message.chat, update.message.message_id)
+                self.send_tg_message_reply_or_private(update,
+                                                      "Se rispondi ad un messaggio per eliminare un post, "
+                                                      "il messaggio a cui rispondi deve contenere un link")
+                return
         # Get the rule content, post the comment and delete the post
         url = urls_entities.popitem()[1]
         try:
@@ -533,7 +537,10 @@ class MarvinBot:
             return
         elif len(splitted_message) >= 1:
             try:
-                rule_number = int(splitted_message[0])
+                if reply_to_message:
+                    rule_number = int(splitted_message[0])
+                else:
+                    rule_number = int(splitted_message[1])
             except ValueError:
                 self.delete_message_if_admin(update.message.chat, update.message.message_id)
                 self.send_tg_message_reply_or_private(update,
@@ -550,12 +557,15 @@ class MarvinBot:
         # Read the note message if present
         if len(splitted_message) > 1:
             note_message = update.message.text_markdown.replace("/delrule", "").replace(str(rule_number), "").strip()
+            if not reply_to_message:
+                note_message = note_message.replace(str(url), "").strip()
+
         submission = self.reddit.submission(id=cutted_url)
         if submission.subreddit.display_name == self.subreddit.display_name:
             # Create delete comment
             delete_comment = "Il tuo post è stato rimosso per la violazione del seguente articolo del regolamento:\n\n"
             delete_comment += "* " + rule_text + "\n\n"
-            if note_message is not None:
+            if note_message is not None and len(note_message) > 1:
                 delete_comment += note_message + "\n\n"
             delete_comment += "Se hai dubbi o domande, ti preghiamo di inviare un messaggio in "
             delete_comment += "[modmail](https://www.reddit.com/message/compose?to=%2Fr%2F" \
@@ -567,7 +577,8 @@ class MarvinBot:
             mod_object = submission.mod
             mod_object.remove()
             mod_object.lock()
-            self.delete_message_if_admin(update.message.chat, update.message.reply_to_message.message_id)
+            if reply_to_message:
+                self.delete_message_if_admin(update.message.chat, update.message.reply_to_message.message_id)
             self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.updater.bot.send_message(self.admin_group_id,
                                           "Il post (" + url + ") è stato cancellato! (da: "
@@ -580,6 +591,44 @@ class MarvinBot:
                                                   self.subreddit.display_name)
 
             return
+
+    def admin(self, update):
+        """ (Telegram command)
+        Calls every admin available
+        :param update: update: an object that represents an incoming update.
+        """
+
+        # Check if the command has been used in the correct group
+        if not self.is_message_in_correct_group(update.message.chat):
+            self.delete_message_if_admin(update.message.chat, update.message.message_id)
+            self.send_tg_message_reply_or_private(update,
+                                                  "Spiacente, questo bot funziona solo nel"
+                                                  "gruppo autorizzato con id " +
+                                                  str(self.authorized_group_id) + " (" + str(self.tg_group) + ")" +
+                                                  ", non in " +
+                                                  str(update.message.chat.id) + " (attuale)")
+            return
+        to_tag = "I seguenti admin non sono stati contattati in privato e verranno taggati:\n"
+        should_tag_in_group = False
+        try:
+            for single_admin in self.updater.bot.get_chat_administrators(update.message.chat.id):
+                try:
+                    if single_admin.user.username == self.updater.bot.username:
+                        # Skip the bot itself
+                        continue
+                    self.updater.bot.send_message(single_admin.user.id,
+                                                  "E' stato richiesto un intervento nel gruppo con id " +
+                                                  str(self.authorized_group_id) + " (" + str(self.tg_group) + ")")
+                except TelegramError:
+                    if single_admin.user.username:
+                        to_tag += "@" + single_admin.user.username + "\n"
+                        should_tag_in_group = True
+            if should_tag_in_group:
+                self.updater.bot.send_message(update.message.chat.id, to_tag)
+        except TelegramError as e:
+            self.updater.bot.send_message(update.message.chat.id,
+                                          "Errore nella richiesta per la lista di admin [" + e.message + "]")
+        return
 
     def pin_if_necessary(self, to_pin, submission):
         """ (Telegram command)
@@ -621,6 +670,22 @@ class MarvinBot:
     # Bot Start and Error manager
     # ---------------------------------------------
 
+    def welcome(self, bot, update):
+        """
+        An event for when a new User join the group
+        :param bot: an object that represents a Telegram Bot.
+        :param update: an object that represents an incoming update.
+        """
+        for new_user_obj in update.message.new_chat_members:
+            chat_id = update.message.chat.id
+            new_user = self.get_user_name(None, new_user_obj)
+            welcome_message = open(self.welcome_message_file_name, 'r').read()
+            welcome_message = welcome_message.replace("{USER}", str(new_user))
+            welcome_message = welcome_message.replace("{LINK}",
+                                                      "https://www.reddit.com/r/ItalyInformatica/wiki/telegramrules")
+
+            bot.send_message(chat_id=chat_id, text=welcome_message)
+
     def error_handler(self, bot, update, error):
         """
         Log Errors caused by telegram Updates.
@@ -644,6 +709,8 @@ class MarvinBot:
                 self.posttext(self.subreddit, update)
             elif command == "/delrule":
                 self.delrule(update)
+            elif command == "/admin":
+                self.admin(update)
             else:
                 self.delete_message_if_admin(update.message.chat, update.message.message_id, 5)
         return
@@ -734,6 +801,9 @@ class MarvinBot:
         self.logger.info("Starting bot... Setting handler...")
         # Get the dispatcher to register handlers
         dp = self.updater.dispatcher
+
+        # Welcome message
+        dp.add_handler(MessageHandler(Filters.status_update.new_chat_members, self.welcome))
 
         # Register commands
         dp.add_handler(MessageHandler(filters=None, callback=self.message_handler))
