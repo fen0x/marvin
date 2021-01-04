@@ -644,6 +644,12 @@ class MarvinBot:
         bot_ref = self.updater.bot
         self.logger.info("check_new_reddit_posts thread started")
         for submission in self.subreddit.stream.submissions(skip_existing=True):
+            # Check if is too old (10 days)
+            now_time = datetime.now()
+            created_time = datetime.utcfromtimestamp(int(float(submission.created_utc)))
+            if (now_time - created_time).days > 10:
+                self.logger.info("Ignoring post because is too old:" + submission.title)
+                continue
             notification_content = submission.title + "\n" + \
                                    "Postato da: " + submission.author.name + "\n" + \
                                    submission.shortlink
