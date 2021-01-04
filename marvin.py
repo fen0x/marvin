@@ -4,7 +4,6 @@ import json
 import logging
 import requests
 import io
-import datetime
 import pickle
 import re
 import html
@@ -13,9 +12,9 @@ from threading import Thread
 from praw import Reddit, exceptions, models
 from lxml.html import fromstring
 from urllib import parse as urlparse
-from urllib.parse import unquote
-from telegram import MessageEntity, ChatMember, Chat, TelegramError
-from telegram.ext import MessageHandler, Updater, Filters
+from datetime import datetime
+from telegram import MessageEntity, ChatMember, Chat, TelegramError, Update
+from telegram.ext import MessageHandler, Updater, Filters, CallbackContext
 from time import sleep
 
 
@@ -56,7 +55,7 @@ class MarvinBot:
         self.updater = None
         # Groups in which messages come from
         self.tg_groups = {}
-        # List of autopinned posts
+        # List of auto-pinned posts
         self.auto_pinned_posts = None
         self.posts_to_pin = []
 
@@ -146,7 +145,6 @@ class MarvinBot:
         """
         sleep(seconds_delay)
         self.updater.bot.delete_message(tg_group_id, message_id)
-        return
 
     def delete_message_if_admin(self, tg_group, message_id, seconds_delay=0):
         """
@@ -175,7 +173,6 @@ class MarvinBot:
                     delete_thread.start()
                 else:
                     self.updater.bot.delete_message(tg_group.id, message_id)
-        return
 
     def is_message_in_correct_group(self, chat: Chat):
         """
@@ -235,7 +232,6 @@ class MarvinBot:
                 text_to_send = "@" + str(update.message.from_user.username) + "\n" + text
             self.updater.bot.send_message(chat_id=update.message.chat.id,
                                           text=text_to_send)
-        return
 
     # ---------------------------------------------
     # Bot commands
@@ -251,8 +247,6 @@ class MarvinBot:
                                       'github per maggiori informazioni https://github.com/fen0x/marvin')
         else:
             self.delete_message_if_admin(update.message.chat, update.message.message_id)
-
-        return
 
     def comment(self, update):
         """ (Telegram command)
@@ -303,19 +297,18 @@ class MarvinBot:
         comment_text += comment_content
         url = urls_entities.popitem()[1]
         try:
-            cutted_url = models.Submission.id_from_url(url)
+            cut_url = models.Submission.id_from_url(url)
         except exceptions.ClientException:
             self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.send_tg_message_reply_or_private(update,
                                                   "Il link a cui hai risposto non è un link di reddit valido")
             return
-        submission = self.reddit.submission(id=cutted_url)
+        submission = self.reddit.submission(id=cut_url)
         if submission.subreddit.display_name == self.subreddit.display_name:
             if submission.locked:
                 self.delete_message_if_admin(update.message.chat, update.message.message_id)
                 self.send_tg_message_reply_or_private(update,
                                                       "Non puoi commentare un post lockato!")
-                return
             else:
                 good_check = self.check_blacklist(comment_text)
                 if good_check is None:
@@ -326,22 +319,19 @@ class MarvinBot:
                                                       update.message)
                                                   + ")\n" + comment_link,
                                                   reply_to_message_id=update.message.reply_to_message.message_id)
-                    self.logger.info("Comment added to post with id: " + str(cutted_url))
-                    return
+                    self.logger.info("Comment added to post with id: " + str(cut_url))
                 else:
                     self.delete_message_if_admin(update.message.chat, update.message.message_id)
                     self.send_tg_message_reply_or_private(update,
                                                           "Il tuo commento contiene la seguente parola bandita: " +
                                                           str(good_check)
                                                           )
-                    return
         else:
             self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.send_tg_message_reply_or_private(update,
                                                   "Non puoi inviare commenti a post"
                                                   "che non appartengono al subreddit: " +
                                                   self.subreddit.display_name)
-            return
 
     def postlink(self, subreddit, update):
         """ (Telegram command)
@@ -402,9 +392,9 @@ class MarvinBot:
 
         # Add language tag if specified parameter E
         language_tag = ""
-        splitted_message = update.message.text_markdown.replace("/postlink", "").strip().split()
-        if len(splitted_message) > 0:
-            if splitted_message[0] == "E":
+        split_message = update.message.text_markdown.replace("/postlink", "").strip().split()
+        if len(split_message) > 0:
+            if split_message[0] == "E":
                 language_tag = "[ENG] "
 
         # Submit to reddit, add the default comment and send the link to Telegram:
@@ -519,28 +509,28 @@ class MarvinBot:
         # Get the rule content, post the comment and delete the post
         url = urls_entities.popitem()[1]
         try:
-            cutted_url = models.Submission.id_from_url(url)
+            cut_url = models.Submission.id_from_url(url)
         except exceptions.ClientException:
             self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.send_tg_message_reply_or_private(update,
                                                   "Il link a cui hai risposto non è un link di reddit valido")
             return
-        splitted_message = update.message.text_markdown.replace("/delrule", "").strip().split()
+        split_message = update.message.text_markdown.replace("/delrule", "").strip().split()
         note_message = None
         rule_text = None
         rule_number = -1
         # Read the rule number
-        if len(splitted_message) == 0:
+        if len(split_message) == 0:
             self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.send_tg_message_reply_or_private(update,
                                                   "Non hai fornito il numero di regola per rimuovere il post...")
             return
-        elif len(splitted_message) >= 1:
+        elif len(split_message) >= 1:
             try:
                 if reply_to_message:
-                    rule_number = int(splitted_message[0])
+                    rule_number = int(split_message[0])
                 else:
-                    rule_number = int(splitted_message[1])
+                    rule_number = int(split_message[1])
             except ValueError:
                 self.delete_message_if_admin(update.message.chat, update.message.message_id)
                 self.send_tg_message_reply_or_private(update,
@@ -555,12 +545,12 @@ class MarvinBot:
                 return
             rule_text = self.rules[rule_number]
         # Read the note message if present
-        if len(splitted_message) > 1:
+        if len(split_message) > 1:
             note_message = update.message.text_markdown.replace("/delrule", "").replace(str(rule_number), "").strip()
-            if not reply_to_message:
-                note_message = note_message.replace(str(url), "").strip()
+            # Always remove the url from the note if present
+            note_message = note_message.replace(str(url), "").strip()
 
-        submission = self.reddit.submission(id=cutted_url)
+        submission = self.reddit.submission(id=cut_url)
         if submission.subreddit.display_name == self.subreddit.display_name:
             # Create delete comment
             delete_comment = "Il tuo post è stato rimosso per la violazione del seguente articolo del regolamento:\n\n"
@@ -583,14 +573,12 @@ class MarvinBot:
             self.updater.bot.send_message(self.admin_group_id,
                                           "Il post (" + url + ") è stato cancellato! (da: "
                                           + self.get_user_name(update.message) + ")")
-            self.logger.info("Post with id: " + str(cutted_url) + " has been deleted from Telegram")
+            self.logger.info("Post with id: " + str(cut_url) + " has been deleted from Telegram")
         else:
             self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.send_tg_message_reply_or_private(update,
                                                   "Non puoi cancellare post che non appartengono al subreddit: " +
                                                   self.subreddit.display_name)
-
-            return
 
     def admin(self, update):
         """ (Telegram command)
@@ -625,12 +613,11 @@ class MarvinBot:
                         should_tag_in_group = True
             if should_tag_in_group:
                 self.updater.bot.send_message(update.message.chat.id, to_tag)
-            else:
-                self.updater.bot.send_message(update.message.chat.id, "Gli Admin sono stati contattati.")
+            # Always confirm success
+            self.updater.bot.send_message(update.message.chat.id, "Gli Admin sono stati contattati.")
         except TelegramError as e:
             self.updater.bot.send_message(update.message.chat.id,
                                           "Errore nella richiesta per la lista di admin [" + e.message + "]")
-        return
 
     def pin_if_necessary(self, to_pin, submission):
         """ (Telegram command)
@@ -657,6 +644,12 @@ class MarvinBot:
         bot_ref = self.updater.bot
         self.logger.info("check_new_reddit_posts thread started")
         for submission in self.subreddit.stream.submissions(skip_existing=True):
+            # Check if is too old (3 days)
+            now_time = datetime.now()
+            created_time = datetime.utcfromtimestamp(int(float(submission.created_utc)))
+            if (now_time - created_time).days > 3:
+                self.logger.info("Ignoring post because is too old:" + submission.title)
+                continue
             notification_content = submission.title + "\n" + \
                                    "Postato da: " + submission.author.name + "\n" + \
                                    submission.shortlink
@@ -672,11 +665,11 @@ class MarvinBot:
     # Bot Start and Error manager
     # ---------------------------------------------
 
-    def welcome(self, bot, update):
+    def welcome(self, update: Update, context: CallbackContext):
         """
         An event for when a new User join the group
-        :param bot: an object that represents a Telegram Bot.
         :param update: an object that represents an incoming update.
+        :param context: context: context object passed to the callback called by the Handler or the Dispatcher
         """
         for new_user_obj in update.message.new_chat_members:
             chat_id = update.message.chat.id
@@ -686,18 +679,18 @@ class MarvinBot:
             welcome_message = welcome_message.replace("{LINK}",
                                                       "https://www.reddit.com/r/ItalyInformatica/wiki/telegramrules")
 
-            bot.send_message(chat_id=chat_id, text=welcome_message)
+            self.updater.bot.send_message(chat_id=chat_id, text=welcome_message)
 
-    def error_handler(self, bot, update, error):
+    def error_handler(self, update: Update, context: CallbackContext):
         """
         Log Errors caused by telegram Updates.
-        :param bot: an object that represents a Telegram Bot.
         :param update: an object that represents an incoming update.
-        :param error: an object that represents Telegram errors.
+        :param context: context object passed to the callback called by the Handler or the Dispatcher
         """
-        self.logger.warning('\nUpdate status:\n"%s"\nCaused error:\n"%s"', update, error)
+        self.logger.error('\nUpdate status:\n"%s"', update)
+        self.logger.error(msg="Exception while handling an update:", exc_info=context.error)
 
-    def message_handler(self, bot, update):
+    def message_handler(self, update: Update, context: CallbackContext):
         if update.message.text is not None and update.message.text.startswith("/"):
             # Use first word as command
             command = update.message.text.split(' ', 1)[0].strip()
@@ -763,7 +756,7 @@ class MarvinBot:
             quit(1)
         self.word_blacklist.sort()
 
-        # Read the autopinned posts list
+        # Read the auto-pinned posts list
         try:
             with open(self.auto_pinned_posts_file_name) as data_file:
                 self.auto_pinned_posts = json.load(data_file)
@@ -807,10 +800,10 @@ class MarvinBot:
         dp = self.updater.dispatcher
 
         # Welcome message
-        dp.add_handler(MessageHandler(Filters.status_update.new_chat_members, self.welcome))
+        dp.add_handler(MessageHandler(filters=Filters.status_update.new_chat_members, callback=self.welcome))
 
         # Register commands
-        dp.add_handler(MessageHandler(filters=None, callback=self.message_handler))
+        dp.add_handler(MessageHandler(filters=Filters.all, callback=self.message_handler))
 
         # log all errors
         dp.add_error_handler(self.error_handler)
@@ -834,7 +827,7 @@ if __name__ == '__main__':
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
     logger = logging.getLogger(__name__)
 
-    now = datetime.datetime.now()
+    now = datetime.now()
     filename = str(now.year) + "-" + str(now.month) + "-" + str(now.day) + "-" + str(now.hour) + "-" + str(
         now.minute) + "-" + str(now.second)
 
