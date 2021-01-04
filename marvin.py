@@ -13,8 +13,8 @@ from praw import Reddit, exceptions, models
 from lxml.html import fromstring
 from urllib import parse as urlparse
 from datetime import datetime
-from telegram import MessageEntity, ChatMember, Chat, TelegramError
-from telegram.ext import MessageHandler, Updater, Filters
+from telegram import MessageEntity, ChatMember, Chat, TelegramError, Update
+from telegram.ext import MessageHandler, Updater, Filters, CallbackContext
 from time import sleep
 
 
@@ -547,8 +547,8 @@ class MarvinBot:
         # Read the note message if present
         if len(split_message) > 1:
             note_message = update.message.text_markdown.replace("/delrule", "").replace(str(rule_number), "").strip()
-            if not reply_to_message:
-                note_message = note_message.replace(str(url), "").strip()
+            # Always remove the url from the note if present
+            note_message = note_message.replace(str(url), "").strip()
 
         submission = self.reddit.submission(id=cut_url)
         if submission.subreddit.display_name == self.subreddit.display_name:
@@ -665,11 +665,11 @@ class MarvinBot:
     # Bot Start and Error manager
     # ---------------------------------------------
 
-    def welcome(self, bot, update):
+    def welcome(self, update: Update, context: CallbackContext):
         """
         An event for when a new User join the group
-        :param bot: an object that represents a Telegram Bot.
         :param update: an object that represents an incoming update.
+        :param context: context: context object passed to the callback called by the Handler or the Dispatcher
         """
         for new_user_obj in update.message.new_chat_members:
             chat_id = update.message.chat.id
@@ -679,18 +679,18 @@ class MarvinBot:
             welcome_message = welcome_message.replace("{LINK}",
                                                       "https://www.reddit.com/r/ItalyInformatica/wiki/telegramrules")
 
-            bot.send_message(chat_id=chat_id, text=welcome_message)
+            self.updater.bot.send_message(chat_id=chat_id, text=welcome_message)
 
-    def error_handler(self, bot, update, error):
+    def error_handler(self, update: Update, context: CallbackContext):
         """
         Log Errors caused by telegram Updates.
-        :param bot: an object that represents a Telegram Bot.
         :param update: an object that represents an incoming update.
-        :param error: an object that represents Telegram errors.
+        :param context: context object passed to the callback called by the Handler or the Dispatcher
         """
-        self.logger.warning('\nUpdate status:\n"%s"\nCaused error:\n"%s"', update, error)
+        self.logger.error('\nUpdate status:\n"%s"', update)
+        self.logger.error(msg="Exception while handling an update:", exc_info=context.error)
 
-    def message_handler(self, bot, update):
+    def message_handler(self, update: Update, context: CallbackContext):
         if update.message.text is not None and update.message.text.startswith("/"):
             # Use first word as command
             command = update.message.text.split(' ', 1)[0].strip()
@@ -800,10 +800,10 @@ class MarvinBot:
         dp = self.updater.dispatcher
 
         # Welcome message
-        dp.add_handler(MessageHandler(Filters.status_update.new_chat_members, self.welcome))
+        dp.add_handler(MessageHandler(filters=Filters.status_update.new_chat_members, callback=self.welcome))
 
         # Register commands
-        dp.add_handler(MessageHandler(filters=None, callback=self.message_handler))
+        dp.add_handler(MessageHandler(filters=Filters.all, callback=self.message_handler))
 
         # log all errors
         dp.add_error_handler(self.error_handler)
