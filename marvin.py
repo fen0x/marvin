@@ -222,7 +222,7 @@ class MarvinBot:
         title = re.search("<title>([\w\W]*)<\/title>", contents.text)
         return "[YouTube] " + html.unescape(title.group(1)[0:-10])
 
-    def send_tg_message_reply_or_private(self, update, text):
+    def send_tg_message_reply_or_private(self, update: Update, text):
         """
         Send a reply in private; when not possible, send in group
         @:param update: an object that represents an incoming message.
@@ -245,7 +245,7 @@ class MarvinBot:
     # Bot commands
     # ---------------------------------------------
 
-    def start(self, update):
+    def start(self, update: Update):
         """ (Telegram command)
         Send a message when the command /start is issued.
         @:param update: an object that represents an incoming update.
@@ -256,7 +256,7 @@ class MarvinBot:
         else:
             self.delete_message_if_admin(update.message.chat, update.message.message_id)
 
-    def comment(self, update):
+    def comment(self, update: Update):
         """ (Telegram command)
         Adds a comment to a reddit post (only if it belong to the authorized subreddit)
         :param update: an object that represents an incoming update.
@@ -415,7 +415,7 @@ class MarvinBot:
                                       reply_to_message_id=update.message.reply_to_message.message_id)
         self.logger.info("New link-post submitted")
 
-    def posttext(self, subreddit, update):
+    def posttext(self, subreddit, update: Update):
         """ (Telegram command)
         Given a text and a title (from an admin) it create a text post in the subreddit
         :param subreddit: The subreddit where the bot should post the content
@@ -469,7 +469,7 @@ class MarvinBot:
                                       reply_to_message_id=update.message.reply_to_message.message_id)
         self.logger.info("New text-post submitted")
 
-    def delrule(self, update):
+    def delrule(self, update: Update):
         """ (Telegram command)
         Delete a post from the subreddit, posting the reason as comment reading it from the rule dictionary
         :param update: update: an object that represents an incoming update.
@@ -604,7 +604,7 @@ class MarvinBot:
                                                   "Non puoi cancellare post che non appartengono al subreddit: " +
                                                   self.subreddit.display_name)
 
-    def delcomment(self, update):
+    def delcomment(self, update: Update):
         """ (Telegram command)
         Delete a comment from a post in the the subreddit,
         posting the reason as comment reading it from the rule dictionary
@@ -726,7 +726,7 @@ class MarvinBot:
                                                   "Non puoi cancellare commenti che non appartengono al subreddit: " +
                                                   self.subreddit.display_name)
 
-    def admin(self, update):
+    def admin(self, update: Update):
         """ (Telegram command)
         Calls every admin available
         :param update: update: an object that represents an incoming update.
@@ -766,7 +766,7 @@ class MarvinBot:
                                           "Errore nella richiesta per la lista di admin [" + e.message + "]")
 
     def pin_if_necessary(self, to_pin, submission):
-        """ (Telegram command)
+        """
         Pin reddit post if necessary
         :param to_pin: the message to pin
         :param submission: the reddit post
@@ -777,6 +777,13 @@ class MarvinBot:
                     if authors_pin == submission.author.name.lower():
                         self.updater.bot.pin_chat_message(to_pin.chat_id, to_pin.message_id, disable_notification=True)
                         return
+
+    def get_id(self, update: Update):
+        """ (Telegram command)
+        Send a message containing the chat id
+        :param update: :param update: update: an object that represents an incoming update.
+        """
+        self.updater.bot.send_message(update.message.chat.id, "Current chat id:" + str(update.message.chat.id))
 
     # ---------------------------------------------
     # Threads
@@ -848,6 +855,8 @@ class MarvinBot:
             command = update.message.text.split(' ', 1)[0].strip()
             if command == "/start":
                 self.start(update)
+            elif command == "/id":
+                self.get_id(update)
             elif command == "/comment":
                 self.comment(update)
             elif command == "/postlink":
