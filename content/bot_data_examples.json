@@ -2,6 +2,7 @@
   "telegram": {
     "login_token": "TOKEN",
     "authorized_group_id": 0,
+    "others_commands_groups": [0,1,2],
     "admin_group_id": 0,
     "tg_group" : "UsernameTest"
   },

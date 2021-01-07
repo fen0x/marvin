@@ -29,11 +29,16 @@ class MarvinBot:
     word_blacklist_file_name = "content/words_blacklist.json"
     auto_pinned_posts_file_name = "content/auto_pinned_posts.json"
 
+    delrule_command = "/delrule"
+    delcomment_command = "/delcomment"
+
     def __init__(self, logger_ref):
         # The subreddit where the bot must post
         self.subreddit = None
         # The authorized group id, used to deny commands from other chats (From JSON)
         self.authorized_group_id = None
+        # Others groups that can accept commands from this bot
+        self.others_commands_groups = None
         # The admin group id, used to send all new post notification to them (From JSON)
         self.admin_group_id = None
         # The default comment the bot will automatically add to every post submitted (From txt)
@@ -153,6 +158,8 @@ class MarvinBot:
         :param tg_group: the group we want to delete the message from
         :param message_id: the id of the message to delete
         :param seconds_delay: delay of the delete (in seconds)
+        an alternative is to use something like this, to use the bot job system:
+        context.job_queue.run_once(self.delay_function, 5, context=message, name=str(chat_id))
         """
 
         if tg_group.id not in self.tg_groups:
@@ -181,7 +188,7 @@ class MarvinBot:
         :param chat: The chat where the message has been sent
         :return: True if the message is in the group saved in the JSON, False otherwise
         """
-        return chat.id == self.authorized_group_id
+        return chat.id == self.authorized_group_id or chat.id in self.others_commands_groups
 
     def add_default_comment(self, post_submission, tg_msg_id):
         """
@@ -215,7 +222,7 @@ class MarvinBot:
         title = re.search("<title>([\w\W]*)<\/title>", contents.text)
         return "[YouTube] " + html.unescape(title.group(1)[0:-10])
 
-    def send_tg_message_reply_or_private(self, update, text):
+    def send_tg_message_reply_or_private(self, update: Update, text):
         """
         Send a reply in private; when not possible, send in group
         @:param update: an object that represents an incoming message.
@@ -238,7 +245,7 @@ class MarvinBot:
     # Bot commands
     # ---------------------------------------------
 
-    def start(self, update):
+    def start(self, update: Update):
         """ (Telegram command)
         Send a message when the command /start is issued.
         @:param update: an object that represents an incoming update.
@@ -249,7 +256,7 @@ class MarvinBot:
         else:
             self.delete_message_if_admin(update.message.chat, update.message.message_id)
 
-    def comment(self, update):
+    def comment(self, update: Update):
         """ (Telegram command)
         Adds a comment to a reddit post (only if it belong to the authorized subreddit)
         :param update: an object that represents an incoming update.
@@ -408,7 +415,7 @@ class MarvinBot:
                                       reply_to_message_id=update.message.reply_to_message.message_id)
         self.logger.info("New link-post submitted")
 
-    def posttext(self, subreddit, update):
+    def posttext(self, subreddit, update: Update):
         """ (Telegram command)
         Given a text and a title (from an admin) it create a text post in the subreddit
         :param subreddit: The subreddit where the bot should post the content
@@ -462,7 +469,7 @@ class MarvinBot:
                                       reply_to_message_id=update.message.reply_to_message.message_id)
         self.logger.info("New text-post submitted")
 
-    def delrule(self, update):
+    def delrule(self, update: Update):
         """ (Telegram command)
         Delete a post from the subreddit, posting the reason as comment reading it from the rule dictionary
         :param update: update: an object that represents an incoming update.
@@ -516,7 +523,7 @@ class MarvinBot:
             self.send_tg_message_reply_or_private(update,
                                                   "Il link a cui hai risposto non è un link di reddit valido")
             return
-        split_message = update.message.text_markdown.replace("/delrule", "").strip().split()
+        split_message = update.message.text_markdown.replace(self.delrule_command, "").strip().split()
         note_message = None
         rule_text = None
         rule_number = -1
@@ -536,8 +543,8 @@ class MarvinBot:
                 self.delete_message_if_admin(update.message.chat, update.message.message_id)
                 self.send_tg_message_reply_or_private(update,
                                                       "Hai fornito un numero di regola non valido... "
-                                                      "Utilizza il comando con /delrule "
-                                                      "<numero regola> <note(opzionale)>")
+                                                      "Utilizza il comando con " + self.delrule_command +
+                                                      " <numero regola> <note(opzionale)>")
                 return
             if rule_number not in self.rules:
                 self.delete_message_if_admin(update.message.chat, update.message.message_id)
@@ -548,7 +555,7 @@ class MarvinBot:
         # Read the note message if present
         if len(split_message) > 1:
             # Remove the command and the rule number from the message
-            note_message = update.message.text_markdown.replace("/delrule", "") \
+            note_message = update.message.text_markdown.replace(self.delrule_command, "") \
                 .replace(str(split_message[1]), "") \
                 .strip()
             # And pop it from split_message[]
@@ -597,7 +604,129 @@ class MarvinBot:
                                                   "Non puoi cancellare post che non appartengono al subreddit: " +
                                                   self.subreddit.display_name)
 
-    def admin(self, update):
+    def delcomment(self, update: Update):
+        """ (Telegram command)
+        Delete a comment from a post in the the subreddit,
+        posting the reason as comment reading it from the rule dictionary
+        :param update: update: an object that represents an incoming update.
+        """
+
+        # Check if the command has been used in the correct group
+        if not self.is_message_in_correct_group(update.message.chat):
+            self.delete_message_if_admin(update.message.chat, update.message.message_id)
+            self.send_tg_message_reply_or_private(update,
+                                                  "Spiacente, questo bot funziona solo nel"
+                                                  "gruppo autorizzato con id " +
+                                                  str(self.authorized_group_id) + " (" + str(self.tg_group) + ")" +
+                                                  ", non in " +
+                                                  str(update.message.chat.id) + " (attuale)")
+            return
+
+        # Check if the command has been used from an administrator
+        if not self.is_sender_admin(self.updater.bot, update.message.chat.id, update.message.from_user.id):
+            self.delete_message_if_admin(update.message.chat, update.message.message_id)
+            self.send_tg_message_reply_or_private(update,
+                                                  "Spiacente, non sei un amministratore.")
+            return
+
+        # Get the comment url
+        urls_entities = update.message.parse_entities([MessageEntity.URL])
+        if not urls_entities:
+            self.delete_message_if_admin(update.message.chat, update.message.message_id)
+            self.send_tg_message_reply_or_private(update,
+                                                  "Il messaggio originale deve contenere una URL")
+            return
+
+        # Get the rule content, post the comment and lock the comment
+        url = urls_entities.popitem()[1]
+        try:
+            cut_url = models.Comment.id_from_url(url)
+        except exceptions.ClientException:
+            self.delete_message_if_admin(update.message.chat, update.message.message_id)
+            self.send_tg_message_reply_or_private(update,
+                                                  "Il link fornito non è un link di reddit valido")
+            return
+        split_message = update.message.text_markdown.replace(self.delcomment_command, "").strip().split()
+        note_message = None
+        rule_text = None
+        rule_number = -1
+        # Read the rule number
+        if len(split_message) <= 1:
+            self.delete_message_if_admin(update.message.chat, update.message.message_id)
+            self.send_tg_message_reply_or_private(update,
+                                                  "Non hai fornito il numero di regola per rimuovere il commento...")
+            return
+        elif len(split_message) > 1:
+            try:
+                rule_number = int(split_message[1])
+            except ValueError:
+                self.delete_message_if_admin(update.message.chat, update.message.message_id)
+                self.send_tg_message_reply_or_private(update,
+                                                      "Hai fornito un numero di regola non valido... "
+                                                      "Utilizza il comando con " + self.delcomment_command +
+                                                      " <link> <numero regola> <note(opzionale)>")
+                return
+            if rule_number not in self.rules:
+                self.delete_message_if_admin(update.message.chat, update.message.message_id)
+                self.send_tg_message_reply_or_private(update,
+                                                      "Hai fornito un numero di regola non presente nella lista...")
+                return
+            rule_text = self.rules[rule_number]
+        # Read the note message if present
+        if len(split_message) > 1:
+            # Remove the command and the rule number from the message
+            note_message = update.message.text_markdown.replace(self.delcomment_command, "") \
+                .replace(str(split_message[1]), "") \
+                .strip()
+            # And pop it from split_message[]
+            del split_message[1]
+            # Check every other string in split_message
+            for string_split in split_message:
+                # If it starts with "http" (is an url)
+                if string_split.startswith("http"):
+                    # Check if is the post url, if so remove it
+                    possible_url = string_split.replace("\\", "")
+                    similarity = SequenceMatcher(None, url.lower(), possible_url.lower()).ratio()
+                    if possible_url == url or similarity >= 0.9:
+                        # The url is the same, so remove it from note message
+                        note_message = note_message.replace(string_split, "").strip()
+                        self.logger.info("delcomment: removed an url from 'note_message'")
+                    else:
+                        self.logger.info("delcomment: contain an url in 'note_message' not removed")
+
+        linked_comment = self.reddit.comment(id=cut_url)
+        if linked_comment.subreddit.display_name == self.subreddit.display_name:
+            # Create delete comment
+            delete_comment = "Il tuo commento è stato rimosso per la violazione del seguente articolo del regolamento:\n\n"
+            delete_comment += "* " + rule_text + "\n\n"
+            if note_message is not None and len(note_message) > 1:
+                delete_comment += note_message + "\n\n"
+            delete_comment += "Se hai dubbi o domande, ti preghiamo di inviare un messaggio in "
+            delete_comment += "[modmail](https://www.reddit.com/message/compose?to=%2Fr%2F" \
+                              + self.subreddit.display_name + ").\n\n"
+
+            # Reply with the rule, and make the reply sticky
+            reply_comment = linked_comment.reply(delete_comment)
+            reply_comment.mod.distinguish(sticky=True)
+            # Down-vote and remove the linked comment
+            linked_comment.downvote()
+            linked_comment.mod.remove()
+            # Lock linked comment and created comment
+            linked_comment.mod.lock()
+            reply_comment.mod.lock()
+
+            self.delete_message_if_admin(update.message.chat, update.message.message_id)
+            self.updater.bot.send_message(self.admin_group_id,
+                                          "Il commento (" + url + ") è stato cancellato! (da: "
+                                          + self.get_user_name(update.message) + ")")
+            self.logger.info("Comment with id: " + str(cut_url) + " has been deleted from Telegram")
+        else:
+            self.delete_message_if_admin(update.message.chat, update.message.message_id)
+            self.send_tg_message_reply_or_private(update,
+                                                  "Non puoi cancellare commenti che non appartengono al subreddit: " +
+                                                  self.subreddit.display_name)
+
+    def admin(self, update: Update):
         """ (Telegram command)
         Calls every admin available
         :param update: update: an object that represents an incoming update.
@@ -637,7 +766,7 @@ class MarvinBot:
                                           "Errore nella richiesta per la lista di admin [" + e.message + "]")
 
     def pin_if_necessary(self, to_pin, submission):
-        """ (Telegram command)
+        """
         Pin reddit post if necessary
         :param to_pin: the message to pin
         :param submission: the reddit post
@@ -648,6 +777,13 @@ class MarvinBot:
                     if authors_pin == submission.author.name.lower():
                         self.updater.bot.pin_chat_message(to_pin.chat_id, to_pin.message_id, disable_notification=True)
                         return
+
+    def get_id(self, update: Update):
+        """ (Telegram command)
+        Send a message containing the chat id
+        :param update: :param update: update: an object that represents an incoming update.
+        """
+        self.updater.bot.send_message(update.message.chat.id, "Current chat id:" + str(update.message.chat.id))
 
     # ---------------------------------------------
     # Threads
@@ -696,7 +832,9 @@ class MarvinBot:
             welcome_message = welcome_message.replace("{LINK}",
                                                       "https://www.reddit.com/r/ItalyInformatica/wiki/telegramrules")
 
-            self.updater.bot.send_message(chat_id=chat_id, text=welcome_message)
+            message_obj = self.updater.bot.send_message(chat_id=chat_id, text=welcome_message)
+            # 300 seconds are 5 minutes
+            self.delete_message_if_admin(update.message.chat, message_obj.message_id, 300)
 
     def error_handler(self, update: Update, context: CallbackContext):
         """
@@ -708,25 +846,33 @@ class MarvinBot:
         self.logger.error(msg="Exception while handling an update:", exc_info=context.error)
 
     def message_handler(self, update: Update, context: CallbackContext):
-        if update.message.text is not None and update.message.text.startswith("/"):
+        # Check that is a valid call
+        if update is None or update.message is None or update.message.text is None:
+            return
+
+        if update.message.text.startswith("/"):
             # Use first word as command
             command = update.message.text.split(' ', 1)[0].strip()
             if command == "/start":
                 self.start(update)
+            elif command == "/id":
+                self.get_id(update)
             elif command == "/comment":
                 self.comment(update)
             elif command == "/postlink":
                 self.postlink(self.subreddit, update)
             elif command == "/posttext":
                 self.posttext(self.subreddit, update)
-            elif command == "/delrule":
+            elif command == self.delrule_command:
                 self.delrule(update)
+            elif command == self.delcomment_command:
+                self.delcomment(update)
             elif command == "/admin":
                 self.admin(update)
             else:
                 self.delete_message_if_admin(update.message.chat, update.message.message_id, 5)
 
-        elif update.message.text is not None and "@admin" in update.message.text:
+        elif "@admin" in update.message.text:
             self.admin(update)
 
     def main(self):
@@ -805,6 +951,7 @@ class MarvinBot:
             "Connected to subreddit: " + str(self.subreddit.display_name) + " - " + str(self.subreddit.title))
         # Read authorized group name
         self.authorized_group_id = int(bot_data_file["telegram"]["authorized_group_id"])
+        self.others_commands_groups = bot_data_file["telegram"]["others_commands_groups"]
         self.admin_group_id = int(bot_data_file["telegram"]["admin_group_id"])
         self.tg_group = bot_data_file["telegram"]["tg_group"]
         # Read the prefix to the post title
