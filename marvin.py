@@ -16,6 +16,7 @@ from datetime import datetime
 from telegram import MessageEntity, ChatMember, Chat, TelegramError, Update
 from telegram.ext import MessageHandler, Updater, Filters, CallbackContext
 from time import sleep
+from difflib import SequenceMatcher
 
 
 class MarvinBot:
@@ -546,9 +547,25 @@ class MarvinBot:
             rule_text = self.rules[rule_number]
         # Read the note message if present
         if len(split_message) > 1:
-            note_message = update.message.text_markdown.replace("/delrule", "").replace(str(rule_number), "").strip()
-            # Always remove the url from the note if present
-            note_message = note_message.replace(str(url), "").strip()
+            # Remove the command and the rule number from the message
+            note_message = update.message.text_markdown.replace("/delrule", "") \
+                .replace(str(split_message[1]), "") \
+                .strip()
+            # And pop it from split_message[]
+            del split_message[1]
+            # Check every other string in split_message
+            for string_split in split_message:
+                # If it starts with "http" (is an url)
+                if string_split.startswith("http"):
+                    # Check if is the post url, if so remove it
+                    possible_url = string_split.replace("\\", "")
+                    similarity = SequenceMatcher(None, url.lower(), possible_url.lower()).ratio()
+                    if possible_url == url or similarity >= 0.9:
+                        # The url is the same, so remove it from note message
+                        note_message = note_message.replace(string_split, "").strip()
+                        self.logger.info("delrule: removed an url from 'note_message'")
+                    else:
+                        self.logger.info("delrule: contain an url in 'note_message' not removed")
 
         submission = self.reddit.submission(id=cut_url)
         if submission.subreddit.display_name == self.subreddit.display_name:
