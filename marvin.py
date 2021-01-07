@@ -158,6 +158,8 @@ class MarvinBot:
         :param tg_group: the group we want to delete the message from
         :param message_id: the id of the message to delete
         :param seconds_delay: delay of the delete (in seconds)
+        an alternative is to use something like this, to use the bot job system:
+        context.job_queue.run_once(self.delay_function, 5, context=message, name=str(chat_id))
         """
 
         if tg_group.id not in self.tg_groups:
@@ -823,7 +825,9 @@ class MarvinBot:
             welcome_message = welcome_message.replace("{LINK}",
                                                       "https://www.reddit.com/r/ItalyInformatica/wiki/telegramrules")
 
-            self.updater.bot.send_message(chat_id=chat_id, text=welcome_message)
+            message_obj = self.updater.bot.send_message(chat_id=chat_id, text=welcome_message)
+            # 300 seconds are 5 minutes
+            self.delete_message_if_admin(update.message.chat, message_obj.message_id, 300)
 
     def error_handler(self, update: Update, context: CallbackContext):
         """
@@ -835,7 +839,11 @@ class MarvinBot:
         self.logger.error(msg="Exception while handling an update:", exc_info=context.error)
 
     def message_handler(self, update: Update, context: CallbackContext):
-        if update.message is not None and update.message.text is not None and update.message.text.startswith("/"):
+        # Check that is a valid call
+        if update is None or update.message is None or update.message.text is None:
+            return
+
+        if update.message.text.startswith("/"):
             # Use first word as command
             command = update.message.text.split(' ', 1)[0].strip()
             if command == "/start":
@@ -855,7 +863,7 @@ class MarvinBot:
             else:
                 self.delete_message_if_admin(update.message.chat, update.message.message_id, 5)
 
-        elif update.message.text is not None and "@admin" in update.message.text:
+        elif "@admin" in update.message.text:
             self.admin(update)
 
     def main(self):
