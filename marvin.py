@@ -34,6 +34,8 @@ class MarvinBot:
         self.subreddit = None
         # The authorized group id, used to deny commands from other chats (From JSON)
         self.authorized_group_id = None
+        # Others groups that can accept commands from this bot
+        self.others_commands_groups = None
         # The admin group id, used to send all new post notification to them (From JSON)
         self.admin_group_id = None
         # The default comment the bot will automatically add to every post submitted (From txt)
@@ -181,7 +183,7 @@ class MarvinBot:
         :param chat: The chat where the message has been sent
         :return: True if the message is in the group saved in the JSON, False otherwise
         """
-        return chat.id == self.authorized_group_id
+        return chat.id == self.authorized_group_id or chat.id in self.others_commands_groups
 
     def add_default_comment(self, post_submission, tg_msg_id):
         """
@@ -805,6 +807,7 @@ class MarvinBot:
             "Connected to subreddit: " + str(self.subreddit.display_name) + " - " + str(self.subreddit.title))
         # Read authorized group name
         self.authorized_group_id = int(bot_data_file["telegram"]["authorized_group_id"])
+        self.others_commands_groups = bot_data_file["telegram"]["others_commands_groups"]
         self.admin_group_id = int(bot_data_file["telegram"]["admin_group_id"])
         self.tg_group = bot_data_file["telegram"]["tg_group"]
         # Read the prefix to the post title
