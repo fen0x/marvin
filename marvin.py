@@ -706,7 +706,8 @@ class MarvinBot:
             # Reply with the rule, and make the reply sticky
             reply_comment = linked_comment.reply(delete_comment)
             reply_comment.mod.distinguish(sticky=True)
-            # Remove the linked comment
+            # Down-vote and remove the linked comment
+            linked_comment.downvote()
             linked_comment.mod.remove()
             # Lock linked comment and created comment
             linked_comment.mod.lock()
