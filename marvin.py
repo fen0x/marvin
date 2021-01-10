@@ -126,6 +126,24 @@ class MarvinBot:
         else:
             return user.full_name
 
+    def remove_url_from_del_reply(self, note_message, split_message, url):
+        # Check every other string in split_message
+        for string_split in split_message:
+            # If it starts with "http" (is an url)
+            if string_split.startswith("http"):
+                # Check if is the post url, if so remove it
+                possible_url = string_split.replace("\\", "")
+                similarity = SequenceMatcher(None, url.lower(), possible_url.lower()).ratio()
+                if possible_url == url or similarity >= 0.9:
+                    # The url is the same, so remove it from note message
+                    # This split remove the first word from a string, the URL in our case
+                    note_message = note_message.split(' ', 1)[1].strip()
+                    self.logger.info("removed an url from 'note_message'")
+                    break
+                else:
+                    self.logger.info("url in 'note_message' not removed")
+        return note_message
+
     def check_blacklist(self, text):
         words = text.split()
         words.sort()
@@ -554,25 +572,23 @@ class MarvinBot:
             rule_text = self.rules[rule_number]
         # Read the note message if present
         if len(split_message) > 1:
-            # Remove the command and the rule number from the message
-            note_message = update.message.text_markdown.replace(self.delrule_command, "") \
-                .replace(str(split_message[1]), "") \
-                .strip()
-            # And pop it from split_message[]
-            del split_message[1]
-            # Check every other string in split_message
-            for string_split in split_message:
-                # If it starts with "http" (is an url)
-                if string_split.startswith("http"):
-                    # Check if is the post url, if so remove it
-                    possible_url = string_split.replace("\\", "")
-                    similarity = SequenceMatcher(None, url.lower(), possible_url.lower()).ratio()
-                    if possible_url == url or similarity >= 0.9:
-                        # The url is the same, so remove it from note message
-                        note_message = note_message.replace(string_split, "").strip()
-                        self.logger.info("delrule: removed an url from 'note_message'")
-                    else:
-                        self.logger.info("delrule: contain an url in 'note_message' not removed")
+            if reply_to_message:
+                # If i reply to a message the number of rule is the parameter 0
+                note_message = update.message.text_markdown.replace(self.delrule_command, "") \
+                    .replace(str(split_message[0]), "") \
+                    .strip()
+                # And pop it from split_message[]
+                del split_message[0]
+            else:
+                # If i am not replying to a message the number of rule is the parameter 1, 0 is the URL
+                # Remove the command and the rule number from the message
+                note_message = update.message.text_markdown.replace(self.delrule_command, "") \
+                    .replace(str(split_message[1]), "") \
+                    .strip()
+                # And pop it from split_message[]
+                del split_message[1]
+            # Remove the url from the comment note
+            note_message = self.remove_url_from_del_reply(note_message, split_message, url)
 
         submission = self.reddit.submission(id=cut_url)
         if submission.subreddit.display_name == self.subreddit.display_name:
@@ -680,19 +696,8 @@ class MarvinBot:
                 .strip()
             # And pop it from split_message[]
             del split_message[1]
-            # Check every other string in split_message
-            for string_split in split_message:
-                # If it starts with "http" (is an url)
-                if string_split.startswith("http"):
-                    # Check if is the post url, if so remove it
-                    possible_url = string_split.replace("\\", "")
-                    similarity = SequenceMatcher(None, url.lower(), possible_url.lower()).ratio()
-                    if possible_url == url or similarity >= 0.9:
-                        # The url is the same, so remove it from note message
-                        note_message = note_message.replace(string_split, "").strip()
-                        self.logger.info("delcomment: removed an url from 'note_message'")
-                    else:
-                        self.logger.info("delcomment: contain an url in 'note_message' not removed")
+            # Remove the url from the comment note
+            note_message = self.remove_url_from_del_reply(note_message, split_message, url)
 
         linked_comment = self.reddit.comment(id=cut_url)
         if linked_comment.subreddit.display_name == self.subreddit.display_name:
