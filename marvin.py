@@ -126,8 +126,11 @@ class MarvinBot:
         else:
             return user.full_name
 
-    def remove_url_from_del_reply(self, note_message, split_message, url):
+    def remove_url_from_del_reply(self, split_message, url):
+        # This method iterate split_message and remove the url to the post, or any other un-wanted item
+        # It works adding elements we WANT to another array, final_list, that is later converted to string
         # Check every other string in split_message
+        final_list = list()
         for string_split in split_message:
             # If it starts with "http" (is an url)
             if string_split.startswith("http"):
@@ -135,14 +138,18 @@ class MarvinBot:
                 possible_url = string_split.replace("\\", "")
                 similarity = SequenceMatcher(None, url.lower(), possible_url.lower()).ratio()
                 if possible_url == url or similarity >= 0.9:
-                    # The url is the same, so remove it from note message
+                    # The url is the same, so remove it
                     # This split remove the first word from a string, the URL in our case
-                    note_message = note_message.split(' ', 1)[1].strip()
                     self.logger.info("removed an url from 'note_message'")
-                    break
                 else:
+                    # Element not removed, put it in final list
+                    final_list.append(string_split)
                     self.logger.info("url in 'note_message' not removed")
-        return note_message
+            else:
+                # Element not removed, put it in final list
+                final_list.append(string_split)
+        final_string = " ".join(final_list)
+        return final_string
 
     def check_blacklist(self, text):
         words = text.split()
@@ -512,7 +519,7 @@ class MarvinBot:
             return
 
         # Check if the command is used as reply to another message
-        reply_to_message = False
+        is_reply_to_message = False
         if not update.message.reply_to_message:
             # If no see if it contains an url
             urls_entities = update.message.parse_entities([MessageEntity.URL])
@@ -525,7 +532,7 @@ class MarvinBot:
         else:
             # Check that the reply message has the url
             urls_entities = update.message.reply_to_message.parse_entities([MessageEntity.URL])
-            reply_to_message = True
+            is_reply_to_message = True
             if not urls_entities:
                 self.delete_message_if_admin(update.message.chat, update.message.message_id)
                 self.send_tg_message_reply_or_private(update,
@@ -553,7 +560,7 @@ class MarvinBot:
             return
         elif len(split_message) >= 1:
             try:
-                if reply_to_message:
+                if is_reply_to_message:
                     rule_number = int(split_message[0])
                 else:
                     rule_number = int(split_message[1])
@@ -572,7 +579,7 @@ class MarvinBot:
             rule_text = self.rules[rule_number]
         # Read the note message if present
         if len(split_message) > 1:
-            if reply_to_message:
+            if is_reply_to_message:
                 # If i reply to a message the number of rule is the parameter 0
                 note_message = update.message.text_markdown.replace(self.delrule_command, "") \
                     .replace(str(split_message[0]), "") \
@@ -588,7 +595,7 @@ class MarvinBot:
                 # And pop it from split_message[]
                 del split_message[1]
             # Remove the url from the comment note
-            note_message = self.remove_url_from_del_reply(note_message, split_message, url)
+            note_message = self.remove_url_from_del_reply(split_message, url)
 
         submission = self.reddit.submission(id=cut_url)
         if submission.subreddit.display_name == self.subreddit.display_name:
@@ -607,7 +614,7 @@ class MarvinBot:
             mod_object = submission.mod
             mod_object.remove()
             mod_object.lock()
-            if reply_to_message:
+            if is_reply_to_message:
                 self.delete_message_if_admin(update.message.chat, update.message.reply_to_message.message_id)
             self.delete_message_if_admin(update.message.chat, update.message.message_id)
             self.updater.bot.send_message(self.admin_group_id,
@@ -697,7 +704,7 @@ class MarvinBot:
             # And pop it from split_message[]
             del split_message[1]
             # Remove the url from the comment note
-            note_message = self.remove_url_from_del_reply(note_message, split_message, url)
+            note_message = self.remove_url_from_del_reply(split_message, url)
 
         linked_comment = self.reddit.comment(id=cut_url)
         if linked_comment.subreddit.display_name == self.subreddit.display_name:
