@@ -31,6 +31,7 @@ class MarvinBot:
 
     delrule_command = "/delrule"
     delcomment_command = "/delcomment"
+    appost_command = "/appost"
 
     def __init__(self, logger_ref):
         # The subreddit where the bot must post
@@ -737,6 +738,66 @@ class MarvinBot:
             self.send_tg_message_reply_or_private(update,
                                                   "Non puoi cancellare commenti che non appartengono al subreddit: " +
                                                   self.subreddit.display_name)
+    
+    def appost(self, update: Update):
+        # Check if the command has been used in the correct group
+        if not self.is_message_in_correct_group(update.message.chat):
+            self.delete_message_if_admin(update.message.chat, update.message.message_id)
+            self.send_tg_message_reply_or_private(update,
+                                                  "Spiacente, questo bot funziona solo nel"
+                                                  "gruppo autorizzato con id " +
+                                                  str(self.authorized_group_id) + " (" + str(self.tg_group) + ")" +
+                                                  ", non in " +
+                                                  str(update.message.chat.id) + " (attuale)")
+            return
+
+        # Check if the command has been used from an administrator
+        if not self.is_sender_admin(self.updater.bot, update.message.chat.id, update.message.from_user.id):
+            self.delete_message_if_admin(update.message.chat, update.message.message_id)
+            self.send_tg_message_reply_or_private(update,
+                                                  "Spiacente, non sei un amministratore.")
+            return
+
+        # Check if the command is used as reply to another message
+        is_reply_to_message = False
+        if not update.message.reply_to_message:
+            # If no see if it contains an url
+            urls_entities = update.message.parse_entities([MessageEntity.URL])
+            if not urls_entities:
+                self.delete_message_if_admin(update.message.chat, update.message.message_id)
+                self.send_tg_message_reply_or_private(update,
+                                                      "Il messaggio originale deve contenere una URL "
+                                                      "o rispondere ad un messaggio con una URL")
+                return
+        else:
+            # Check that the reply message has the url
+            urls_entities = update.message.reply_to_message.parse_entities([MessageEntity.URL])
+            is_reply_to_message = True
+            if not urls_entities:
+                self.delete_message_if_admin(update.message.chat, update.message.message_id)
+                self.send_tg_message_reply_or_private(update,
+                                                      "Se rispondi ad un messaggio per eliminare un post, "
+                                                      "il messaggio a cui rispondi deve contenere un link")
+                return
+        # Get the rule content, post the comment and delete the post
+        url = urls_entities.popitem()[1]
+        try:
+            cut_url = models.Submission.id_from_url(url)
+        except exceptions.ClientException:
+            self.delete_message_if_admin(update.message.chat, update.message.message_id)
+            self.send_tg_message_reply_or_private(update,
+                                                  "Il link a cui hai risposto non è un link di reddit valido")
+            return
+
+        submission = self.reddit.submission(id=cut_url)
+        if submission.subreddit.display_name == self.subreddit.display_name:
+            submission.mod.approve()
+            self.delete_message_if_admin(update.message.chat, update.message.message_id)
+        else:
+            self.delete_message_if_admin(update.message.chat, update.message.message_id)
+            self.send_tg_message_reply_or_private(update,
+                                                  "Non puoi approvare post che non appartengono al subreddit: " +
+                                                  self.subreddit.display_name)
 
     def admin(self, update: Update):
         """ (Telegram command)
@@ -808,7 +869,7 @@ class MarvinBot:
         """
         bot_ref = self.updater.bot
         self.logger.info("check_new_reddit_posts thread started")
-        for submission in self.subreddit.stream.submissions(skip_existing=True):
+        for submission in self.subreddit.mod.stream.modqueue(only="submissions", skip_existing=True):
             # Check if is too old (3 days)
             now_time = datetime.now()
             created_time = datetime.utcfromtimestamp(int(float(submission.created_utc)))
@@ -879,6 +940,8 @@ class MarvinBot:
                 self.delrule(update)
             elif command == self.delcomment_command:
                 self.delcomment(update)
+            elif command == self.appost_command:
+                self.appost(update)
             elif command == "/admin":
                 self.admin(update)
             else:
@@ -899,7 +962,7 @@ class MarvinBot:
         except FileNotFoundError:
             self.logger.error("FATAL ERROR-->" + self.config_file_name + " FILE NOT FOUND, ABORTING...")
             quit(1)
-        self.logger.info("Starting bot... Reading informations from files...")
+        self.logger.info("Starting bot... Reading information from files...")
 
         # Read the default comment data
         try:
